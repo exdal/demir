@@ -179,7 +179,9 @@ auto visit_ast(demir::AST::Module *module, demir::AST::NodeID node_id, int depth
         } break;
         case demir::AST::NodeKind::eReturnStatement: {
             fmt::println("Return statement:");
-            visit_ast(module, node->return_statement.return_expression_id, depth + w);
+            if (node->return_statement.return_expression_id != demir::AST::NodeID::Invalid) {
+                visit_ast(module, node->return_statement.return_expression_id, depth + w);
+            }
         } break;
         case demir::AST::NodeKind::eExpressionStatement: {
             fmt::println("Expression statement:");

@@ -275,12 +275,15 @@ auto Parser::parse_function_decl_statement(this Parser &self) -> AST::NodeID {
 auto Parser::parse_return_statement(this Parser &self) -> AST::NodeID {
     self.expect(self.next(), TokenKind::eReturn);
 
-    auto return_type_expr = self.parse_expression();
+    auto return_type_expr_id = AST::NodeID::Invalid;
+    if (!self.peek().is(TokenKind::eSemiColon)) {
+        return_type_expr_id = self.parse_expression();
+    }
 
     self.expect(self.next(), TokenKind::eSemiColon);
 
     auto return_stmt = AST::ReturnStatement{};
-    return_stmt.return_expression_id = return_type_expr;
+    return_stmt.return_expression_id = return_type_expr_id;
 
     return self.module->make_node({ .return_statement = return_stmt });
 }
@@ -358,6 +361,8 @@ auto Parser::parse_primary_expression(this Parser &self) -> AST::NodeID {
         case TokenKind::eIdentifier: {
             expr = self.parse_identifier_expression();
         } break;
+        case TokenKind::eTrue:
+        case TokenKind::eFalse:
         case TokenKind::eStringLiteral:
         case TokenKind::eIntegerLiteral: {
             expr = self.parse_const_value_expression();
