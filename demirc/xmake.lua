@@ -1,0 +1,6 @@
+target("demirc")
+    set_kind("binary")
+    set_languages("cxx23")
+    add_deps("demir")
+    add_files("**.cc")
+target_end()
