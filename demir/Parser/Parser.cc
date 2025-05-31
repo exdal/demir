@@ -250,6 +250,18 @@ auto Parser::parse_single_statement(this Parser &self) -> AST::NodeID {
         case TokenKind::eMatch: {
             return self.parse_multiway_branch_statement();
         }
+        case TokenKind::eBreak: {
+            self.next();
+            self.expect(self.next(), TokenKind::eSemiColon);
+
+            return self.module->make_node({ .break_statement = {} });
+        }
+        case TokenKind::eContinue: {
+            self.next();
+            self.expect(self.next(), TokenKind::eSemiColon);
+
+            return self.module->make_node({ .continue_statement = {} });
+        }
         default: {
             throw ParserUnexpectedTokenError(token.location);
         }
@@ -429,7 +441,7 @@ auto Parser::parse_multiway_branch_statement(this Parser &self) -> AST::NodeID {
             // Force multi statement
             self.expect(TokenKind::eBraceLeft);
             default_case_statement_id = self.parse_multi_statement();
-            
+
             continue;
         }
 

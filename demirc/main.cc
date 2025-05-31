@@ -235,6 +235,12 @@ auto visit_ast(demir::AST::Module *module, demir::AST::NodeID node_id, int depth
             fmt::println("Default case:");
             visit_ast(module, node->multiway_branch_statement.default_case_statement_id, depth + w);
         } break;
+        case demir::AST::NodeKind::eBreakStatement: {
+            fmt::println("Break statement");
+        } break;
+        case demir::AST::NodeKind::eContinueStatement: {
+            fmt::println("Continue statement");
+        } break;
         case demir::AST::NodeKind::eNone:;
     }
 }
