@@ -193,6 +193,13 @@ auto Lexer::next_token(this Lexer &self) -> Token {
         }
         case '!': {
             self.consume();
+            switch (self.peek()) {
+                case '=': {
+                    self.consume();
+                    return Token(TokenKind::eCompareNotEqual, Location(start, 2));
+                } break;
+                default:;
+            }
             return Token(TokenKind::eExclaim, cur_loc);
         }
         case '\'': {
@@ -298,10 +305,23 @@ auto Lexer::next_token(this Lexer &self) -> Token {
         }
         case '<': {
             self.consume();
+            switch (self.peek()) {
+                case '<': {
+                    self.consume();
+                    return Token(TokenKind::eShiftLeft, Location(start, 2));
+                } break;
+                default:;
+            }
             return Token(TokenKind::eAngleLeft, cur_loc);
         }
         case '>': {
             self.consume();
+            switch (self.peek()) {
+                case '>': {
+                    return Token(TokenKind::eShiftRight, Location(start, 2));
+                } break;
+                default:;
+            }
             return Token(TokenKind::eAngleRight, cur_loc);
         }
         case '=': {
@@ -310,6 +330,10 @@ auto Lexer::next_token(this Lexer &self) -> Token {
                 case '>': {
                     self.consume();
                     return Token(TokenKind::eShipRight, Location(start, 2));
+                }
+                case '=': {
+                    self.consume();
+                    return Token(TokenKind::eCompareEqual, Location(start, 2));
                 }
                 default:;
             }
@@ -337,10 +361,24 @@ auto Lexer::next_token(this Lexer &self) -> Token {
         }
         case '&': {
             self.consume();
+            switch (self.peek()) {
+                case '&': {
+                    self.consume();
+                    return Token(TokenKind::eLogicalAnd, Location(start, 2));
+                } break;
+                default:;
+            }
             return Token(TokenKind::eBitAnd, cur_loc);
         }
         case '|': {
             self.consume();
+            switch (self.peek()) {
+                case '|': {
+                    self.consume();
+                    return Token(TokenKind::eLogicalOr, Location(start, 2));
+                } break;
+                default:;
+            }
             return Token(TokenKind::eBitOr, cur_loc);
         }
         case '^': {

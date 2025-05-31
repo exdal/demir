@@ -21,6 +21,30 @@ auto token_kind_to_precedence(TokenKind kind) -> AST::Precedence {
         case TokenKind::eDivEqual: {
             prec = AST::Precedence::eAssignment;
         } break;
+        case TokenKind::eLogicalOr: {
+            prec = AST::Precedence::eLogicalOr;
+        } break;
+        case TokenKind::eLogicalAnd: {
+            prec = AST::Precedence::eLogicalAnd;
+        } break;
+        case TokenKind::eBitOr: {
+            prec = AST::Precedence::eBitOr;
+        } break;
+        case TokenKind::eBitAnd: {
+            prec = AST::Precedence::eBitAnd;
+        } break;
+        case TokenKind::eCompareEqual:
+        case TokenKind::eCompareNotEqual: {
+            prec = AST::Precedence::eCompareEqual;
+        } break;
+        case TokenKind::eAngleLeft:
+        case TokenKind::eAngleRight: {
+            prec = AST::Precedence::eCompareRelational;
+        } break;
+        case TokenKind::eShiftLeft:
+        case TokenKind::eShiftRight: {
+            prec = AST::Precedence::eBitShift;
+        } break;
         case TokenKind::eAdd:
         case TokenKind::eSub: {
             prec = AST::Precedence::eAdditive;
@@ -55,6 +79,22 @@ auto token_kind_to_binary_op(TokenKind kind) -> Option<AST::BinaryOp> {
             return AST::BinaryOp::eBitXor;
         case TokenKind::eBitOr:
             return AST::BinaryOp::eBitOr;
+        case TokenKind::eAngleRight:
+            return AST::BinaryOp::eCompGreater;
+        case TokenKind::eAngleLeft:
+            return AST::BinaryOp::eCompLess;
+        case TokenKind::eCompareEqual:
+            return AST::BinaryOp::eCompEq;
+        case TokenKind::eCompareNotEqual:
+            return AST::BinaryOp::eCompNotEq;
+        case TokenKind::eLogicalAnd:
+            return AST::BinaryOp::eCompAnd;
+        case TokenKind::eLogicalOr:
+            return AST::BinaryOp::eCompOr;
+        case TokenKind::eShiftLeft:
+            return AST::BinaryOp::eShiftLeft;
+        case TokenKind::eShiftRight:
+            return AST::BinaryOp::eShiftRight;
         default:;
     }
 

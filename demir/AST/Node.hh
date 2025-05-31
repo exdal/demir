@@ -24,6 +24,14 @@ enum struct Precedence : i32 {
     eInvalid = -1,
     eComma,
     eAssignment,
+    eLogicalOr,
+    eLogicalAnd,
+    eBitOr,
+    eBitXor,
+    eBitAnd,
+    eCompareEqual,
+    eCompareRelational,
+    eBitShift,
     eAdditive,
     eMultiplicative,
 };
@@ -45,6 +53,7 @@ enum class NodeKind : u32 {
     eReturnStatement,
     eExpressionStatement,
     eWhileStatement,
+    eConditionStatement,
 };
 
 enum struct NodeID : u32 { Invalid = ~0_u32 };
@@ -163,6 +172,12 @@ struct WhileStatement {
 
     NodeID condition_expression_id = NodeID::Invalid;
     NodeID body_statement_id = NodeID::Invalid;
+};
+
+struct ConditionStatement {
+    NodeKind kind = NodeKind::eConditionStatement;
+
+
 };
 
 union Node {
