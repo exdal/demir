@@ -91,6 +91,10 @@ auto token_kind_to_binary_op(TokenKind kind) -> Option<AST::BinaryOp> {
             return AST::BinaryOp::eCompAnd;
         case TokenKind::eLogicalOr:
             return AST::BinaryOp::eCompOr;
+        case TokenKind::eGreaterEqual:
+            return AST::BinaryOp::eCompGreaterEq;
+        case TokenKind::eLessEqual:
+            return AST::BinaryOp::eCompLessEq;
         case TokenKind::eShiftLeft:
             return AST::BinaryOp::eShiftLeft;
         case TokenKind::eShiftRight:
@@ -232,6 +236,9 @@ auto Parser::parse_single_statement(this Parser &self) -> AST::NodeID {
         case TokenKind::eWhile: {
             return self.parse_while_statement();
         }
+        case TokenKind::eIf: {
+            return self.parse_branch_statement();
+        }
         default: {
             throw ParserUnexpectedTokenError(token.location);
         }
@@ -287,12 +294,12 @@ auto Parser::parse_function_decl_statement(this Parser &self) -> AST::NodeID {
             self.expect(self.next(), TokenKind::eComma);
         }
 
-        first_param = false;
         auto param_identifier_expression = self.parse_identifier_expression();
         self.expect(self.next(), TokenKind::eColon);
         auto param_type_expression = self.parse_primary_expression();
 
         params.push_back({ .identifier_expression_id = param_identifier_expression, .type_expression_id = param_type_expression });
+        first_param = false;
     }
 
     self.expect(self.next(), TokenKind::eParenRight);
@@ -351,6 +358,42 @@ auto Parser::parse_while_statement(this Parser &self) -> AST::NodeID {
     while_statement.body_statement_id = body_statement_id;
 
     return self.module->make_node({ .while_statement = while_statement });
+}
+
+auto Parser::parse_branch_statement(this Parser &self) -> AST::NodeID {
+    auto is_first = true;
+    auto conditions = std::vector<AST::BranchStatement::Condition>();
+    while (!self.peek().is(TokenKind::eEof)) {
+        if (!is_first) {
+            self.expect(self.next(), TokenKind::eElse);
+        }
+
+        self.expect(self.next(), TokenKind::eIf);
+
+        auto condition_expression_id = self.parse_expression();
+        auto true_case_statement_id = self.parse_statement();
+
+        conditions.push_back({ .condition_expression_id = condition_expression_id, .true_case_statement_id = true_case_statement_id });
+        is_first = false;
+
+        // continue if this branch is chained
+        if (!(self.peek().is(TokenKind::eElse) && self.peek(1).is(TokenKind::eIf))) {
+            break;
+        }
+    }
+
+    auto false_case_statement_id = AST::NodeID::Invalid;
+    if (self.peek().is(TokenKind::eElse)) {
+        self.next();
+
+        false_case_statement_id = self.parse_statement();
+    }
+
+    auto branch_statement = AST::BranchStatement{};
+    branch_statement.conditions = self.module->copy_into(Span(conditions));
+    branch_statement.false_case_statement_id = false_case_statement_id;
+
+    return self.module->make_node({ .branch_statement = branch_statement });
 }
 
 auto Parser::parse_expression(this Parser &self, AST::Precedence precedence) -> AST::NodeID {

@@ -189,8 +189,30 @@ auto visit_ast(demir::AST::Module *module, demir::AST::NodeID node_id, int depth
         } break;
         case demir::AST::NodeKind::eWhileStatement: {
             fmt::println("While statement:");
+
+            fmt::print("{:{}}", "", depth);
+            fmt::println("Condition statement:");
             visit_ast(module, node->while_statement.condition_expression_id, depth + w);
+
+            fmt::print("{:{}}", "", depth);
+            fmt::println("Body statement:");
             visit_ast(module, node->while_statement.body_statement_id, depth + w);
+        } break;
+        case demir::AST::NodeKind::eBranchStatement: {
+            fmt::println("Branch statement:");
+
+            fmt::print("{:{}}", "", depth);
+            fmt::println("Conditions:");
+            for (const auto &cond : node->branch_statement.conditions) {
+                visit_ast(module, cond.condition_expression_id, depth + w);
+                visit_ast(module, cond.true_case_statement_id, depth + w);
+            }
+
+            if (node->branch_statement.false_case_statement_id != demir::AST::NodeID::Invalid) {
+                fmt::print("{:{}}", "", depth);
+                fmt::println("Else statement:");
+                visit_ast(module, node->branch_statement.false_case_statement_id, depth + w);
+            }
         } break;
         case demir::AST::NodeKind::eNone:;
     }

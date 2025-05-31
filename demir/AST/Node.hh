@@ -53,7 +53,7 @@ enum class NodeKind : u32 {
     eReturnStatement,
     eExpressionStatement,
     eWhileStatement,
-    eConditionStatement,
+    eBranchStatement,
 };
 
 enum struct NodeID : u32 { Invalid = ~0_u32 };
@@ -174,10 +174,16 @@ struct WhileStatement {
     NodeID body_statement_id = NodeID::Invalid;
 };
 
-struct ConditionStatement {
-    NodeKind kind = NodeKind::eConditionStatement;
+struct BranchStatement {
+    struct Condition {
+        NodeID condition_expression_id = NodeID::Invalid;
+        NodeID true_case_statement_id = NodeID::Invalid;
+    };
 
+    NodeKind kind = NodeKind::eBranchStatement;
 
+    NodeArray<Condition> conditions = {};
+    NodeID false_case_statement_id = NodeID::Invalid;
 };
 
 union Node {
@@ -197,5 +203,6 @@ union Node {
     ReturnStatement return_statement;
     ExpressionStatement expression_statement;
     WhileStatement while_statement;
+    BranchStatement branch_statement;
 };
 } // namespace demir::AST

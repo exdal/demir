@@ -310,6 +310,10 @@ auto Lexer::next_token(this Lexer &self) -> Token {
                     self.consume();
                     return Token(TokenKind::eShiftLeft, Location(start, 2));
                 } break;
+                case '=': {
+                    self.consume();
+                    return Token(TokenKind::eLessEqual, Location(start, 2));
+                }
                 default:;
             }
             return Token(TokenKind::eAngleLeft, cur_loc);
@@ -318,8 +322,13 @@ auto Lexer::next_token(this Lexer &self) -> Token {
             self.consume();
             switch (self.peek()) {
                 case '>': {
+                    self.consume();
                     return Token(TokenKind::eShiftRight, Location(start, 2));
                 } break;
+                case '=': {
+                    self.consume();
+                    return Token(TokenKind::eGreaterEqual, Location(start, 2));
+                }
                 default:;
             }
             return Token(TokenKind::eAngleRight, cur_loc);
