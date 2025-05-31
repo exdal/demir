@@ -44,6 +44,7 @@ enum class NodeKind : u32 {
     eDeclareFunctionStatement,
     eReturnStatement,
     eExpressionStatement,
+    eWhileStatement,
 };
 
 enum struct NodeID : u32 { Invalid = ~0_u32 };
@@ -157,6 +158,13 @@ struct ExpressionStatement {
     NodeID expression_id = NodeID::Invalid;
 };
 
+struct WhileStatement {
+    NodeKind kind = NodeKind::eWhileStatement;
+
+    NodeID condition_expression_id = NodeID::Invalid;
+    NodeID body_statement_id = NodeID::Invalid;
+};
+
 union Node {
     NodeKind kind = NodeKind::eNone;
 
@@ -173,5 +181,6 @@ union Node {
     DeclareFunctionStatement decl_function_statement;
     ReturnStatement return_statement;
     ExpressionStatement expression_statement;
+    WhileStatement while_statement;
 };
 } // namespace demir::AST

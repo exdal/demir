@@ -165,10 +165,10 @@ auto Parser::parse_multi_statement(this Parser &self) -> AST::NodeID {
     }
     self.expect(self.next(), TokenKind::eBraceRight);
 
-    auto multi_stmt = AST::MultiStatement{};
-    multi_stmt.statement_ids = self.module->copy_into(Span(statement_ids));
+    auto multi_statement = AST::MultiStatement{};
+    multi_statement.statement_ids = self.module->copy_into(Span(statement_ids));
 
-    return self.module->make_node({ .multi_statement = multi_stmt });
+    return self.module->make_node({ .multi_statement = multi_statement });
 }
 
 auto Parser::parse_single_statement(this Parser &self) -> AST::NodeID {
@@ -189,6 +189,9 @@ auto Parser::parse_single_statement(this Parser &self) -> AST::NodeID {
         case TokenKind::eIdentifier: {
             return self.parse_expression_statement();
         }
+        case TokenKind::eWhile: {
+            return self.parse_while_statement();
+        }
         default: {
             throw ParserUnexpectedTokenError(token.location);
         }
@@ -200,17 +203,17 @@ auto Parser::parse_single_statement(this Parser &self) -> AST::NodeID {
 auto Parser::parse_variable_decl_statement(this Parser &self) -> AST::NodeID {
     self.expect(self.next(), TokenKind::eLet);
 
-    auto identifier_expr = self.parse_identifier_expression();
+    auto identifier_expression = self.parse_identifier_expression();
 
-    auto type_expr_id = AST::NodeID::Invalid;
+    auto type_expression_id = AST::NodeID::Invalid;
     if (self.peek().is(TokenKind::eColon)) {
         self.next();
 
-        type_expr_id = self.parse_primary_expression();
+        type_expression_id = self.parse_primary_expression();
     }
 
     auto initial_expression_id = AST::NodeID::Invalid;
-    if (type_expr_id == AST::NodeID::Invalid || self.peek().is(TokenKind::eEqual)) {
+    if (type_expression_id == AST::NodeID::Invalid || self.peek().is(TokenKind::eEqual)) {
         self.expect(self.next(), TokenKind::eEqual);
 
         initial_expression_id = self.parse_expression();
@@ -218,18 +221,18 @@ auto Parser::parse_variable_decl_statement(this Parser &self) -> AST::NodeID {
 
     self.expect(self.next(), TokenKind::eSemiColon);
 
-    auto decl_var_stmt = AST::DeclareVarStatement{};
-    decl_var_stmt.identifier_expression_id = identifier_expr;
-    decl_var_stmt.type_expression_id = type_expr_id;
-    decl_var_stmt.initial_expression_id = initial_expression_id;
+    auto decl_var_statement = AST::DeclareVarStatement{};
+    decl_var_statement.identifier_expression_id = identifier_expression;
+    decl_var_statement.type_expression_id = type_expression_id;
+    decl_var_statement.initial_expression_id = initial_expression_id;
 
-    return self.module->make_node({ .decl_var_statement = decl_var_stmt });
+    return self.module->make_node({ .decl_var_statement = decl_var_statement });
 }
 
 auto Parser::parse_function_decl_statement(this Parser &self) -> AST::NodeID {
     self.expect(self.next(), TokenKind::eFn);
 
-    auto identifier_expr = self.parse_identifier_expression();
+    auto identifier_expression = self.parse_identifier_expression();
 
     self.expect(self.next(), TokenKind::eParenLeft);
 
@@ -245,69 +248,81 @@ auto Parser::parse_function_decl_statement(this Parser &self) -> AST::NodeID {
         }
 
         first_param = false;
-        auto param_identifier_expr = self.parse_identifier_expression();
+        auto param_identifier_expression = self.parse_identifier_expression();
         self.expect(self.next(), TokenKind::eColon);
-        auto param_type_expr = self.parse_primary_expression();
+        auto param_type_expression = self.parse_primary_expression();
 
-        params.push_back({ .identifier_expression_id = param_identifier_expr, .type_expression_id = param_type_expr });
+        params.push_back({ .identifier_expression_id = param_identifier_expression, .type_expression_id = param_type_expression });
     }
 
     self.expect(self.next(), TokenKind::eParenRight);
 
-    auto return_type_expr = AST::NodeID::Invalid;
+    auto return_type_expression = AST::NodeID::Invalid;
     if (self.peek().is(TokenKind::eArrow)) {
         self.next();
 
-        return_type_expr = self.parse_primary_expression();
+        return_type_expression = self.parse_primary_expression();
     }
 
-    auto body_stmt = self.parse_statement();
+    auto body_statement = self.parse_statement();
 
-    auto decl_function_stmt = AST::DeclareFunctionStatement{};
-    decl_function_stmt.identifier_expression_id = identifier_expr;
-    decl_function_stmt.parameters = self.module->copy_into(Span(params));
-    decl_function_stmt.return_type_expression_id = return_type_expr;
-    decl_function_stmt.body_statement_id = body_stmt;
+    auto decl_function_statement = AST::DeclareFunctionStatement{};
+    decl_function_statement.identifier_expression_id = identifier_expression;
+    decl_function_statement.parameters = self.module->copy_into(Span(params));
+    decl_function_statement.return_type_expression_id = return_type_expression;
+    decl_function_statement.body_statement_id = body_statement;
 
-    return self.module->make_node({ .decl_function_statement = decl_function_stmt });
+    return self.module->make_node({ .decl_function_statement = decl_function_statement });
 }
 
 auto Parser::parse_return_statement(this Parser &self) -> AST::NodeID {
     self.expect(self.next(), TokenKind::eReturn);
 
-    auto return_type_expr_id = AST::NodeID::Invalid;
+    auto return_type_expression_id = AST::NodeID::Invalid;
     if (!self.peek().is(TokenKind::eSemiColon)) {
-        return_type_expr_id = self.parse_expression();
+        return_type_expression_id = self.parse_expression();
     }
 
     self.expect(self.next(), TokenKind::eSemiColon);
 
-    auto return_stmt = AST::ReturnStatement{};
-    return_stmt.return_expression_id = return_type_expr_id;
+    auto return_statement = AST::ReturnStatement{};
+    return_statement.return_expression_id = return_type_expression_id;
 
-    return self.module->make_node({ .return_statement = return_stmt });
+    return self.module->make_node({ .return_statement = return_statement });
 }
 
 auto Parser::parse_expression_statement(this Parser &self) -> AST::NodeID {
-    auto lhs_expr_id = self.parse_expression();
+    auto lhs_expression_id = self.parse_expression();
     self.expect(self.next(), TokenKind::eSemiColon);
 
     auto expression_statement = AST::ExpressionStatement{};
-    expression_statement.expression_id = lhs_expr_id;
+    expression_statement.expression_id = lhs_expression_id;
 
     return self.module->make_node({ .expression_statement = expression_statement });
 }
 
+auto Parser::parse_while_statement(this Parser &self) -> AST::NodeID {
+    self.expect(self.next(), TokenKind::eWhile);
+    auto condition_expression_id = self.parse_expression();
+    auto body_statement_id = self.parse_statement();
+
+    auto while_statement = AST::WhileStatement{};
+    while_statement.condition_expression_id = condition_expression_id;
+    while_statement.body_statement_id = body_statement_id;
+
+    return self.module->make_node({ .while_statement = while_statement });
+}
+
 auto Parser::parse_expression(this Parser &self, AST::Precedence precedence) -> AST::NodeID {
-    auto lhs_expr_id = self.parse_primary_expression();
+    auto lhs_expression_id = self.parse_primary_expression();
     if (self.peek().is(TokenKind::eParenLeft)) {
-        return self.parse_call_function_expression(lhs_expr_id);
+        return self.parse_call_function_expression(lhs_expression_id);
     } else {
-        return self.parse_expression_with_precedence(precedence, lhs_expr_id);
+        return self.parse_expression_with_precedence(precedence, lhs_expression_id);
     }
 }
 
-auto Parser::parse_expression_with_precedence(this Parser &self, AST::Precedence precedence, AST::NodeID lhs_expr_id) -> AST::NodeID {
+auto Parser::parse_expression_with_precedence(this Parser &self, AST::Precedence precedence, AST::NodeID lhs_expression_id) -> AST::NodeID {
     while (!self.peek().is(TokenKind::eEof)) {
         const auto &op_token = self.peek();
         auto op_kind = op_token.kind;
@@ -319,20 +334,20 @@ auto Parser::parse_expression_with_precedence(this Parser &self, AST::Precedence
         }
 
         self.next();
-        auto rhs_expr_id = self.parse_primary_expression();
+        auto rhs_expression_id = self.parse_primary_expression();
 
         const auto &next_token = self.peek();
         auto next_prec = token_kind_to_precedence(next_token.kind);
         auto next_prec_level = std::to_underlying(next_prec);
         if (op_prec_level < next_prec_level) {
-            rhs_expr_id = self.parse_expression_with_precedence(static_cast<AST::Precedence>(op_prec_level + 1), rhs_expr_id);
+            rhs_expression_id = self.parse_expression_with_precedence(static_cast<AST::Precedence>(op_prec_level + 1), rhs_expression_id);
         }
 
         if (op_prec == AST::Precedence::eAssignment) {
             auto assign_expression = AST::AssignExpression{};
             assign_expression.assign_type = token_kind_to_assignment_type(op_kind).value();
-            assign_expression.lhs_expression_id = lhs_expr_id;
-            assign_expression.rhs_expression_id = rhs_expr_id;
+            assign_expression.lhs_expression_id = lhs_expression_id;
+            assign_expression.rhs_expression_id = rhs_expression_id;
 
             return self.module->make_node({ .assign_expression = assign_expression });
         } else {
@@ -341,38 +356,38 @@ auto Parser::parse_expression_with_precedence(this Parser &self, AST::Precedence
                 throw ParserUnexpectedTokenError(op_loc);
             }
 
-            auto binary_op_expr = AST::BinaryExpression{};
-            binary_op_expr.op = binary_op.value();
-            binary_op_expr.lhs_expression_id = lhs_expr_id;
-            binary_op_expr.rhs_expression_id = rhs_expr_id;
+            auto binary_op_expression = AST::BinaryExpression{};
+            binary_op_expression.op = binary_op.value();
+            binary_op_expression.lhs_expression_id = lhs_expression_id;
+            binary_op_expression.rhs_expression_id = rhs_expression_id;
 
-            return self.module->make_node({ .binary_expression = binary_op_expr });
+            return self.module->make_node({ .binary_expression = binary_op_expression });
         }
     }
 
-    return lhs_expr_id;
+    return lhs_expression_id;
 }
 
 auto Parser::parse_primary_expression(this Parser &self) -> AST::NodeID {
     const auto &token = self.peek();
 
-    auto expr = AST::NodeID::Invalid;
+    auto expression_id = AST::NodeID::Invalid;
     switch (token.kind) {
         case TokenKind::eIdentifier: {
-            expr = self.parse_identifier_expression();
+            expression_id = self.parse_identifier_expression();
         } break;
         case TokenKind::eTrue:
         case TokenKind::eFalse:
         case TokenKind::eStringLiteral:
         case TokenKind::eIntegerLiteral: {
-            expr = self.parse_const_value_expression();
+            expression_id = self.parse_const_value_expression();
         } break;
         default: {
             throw ParserUnexpectedTokenError(token.location);
         }
     }
 
-    return expr;
+    return expression_id;
 }
 
 auto Parser::parse_expression_list(this Parser &self, TokenKind terminator) -> std::vector<AST::NodeID> {
@@ -395,10 +410,10 @@ auto Parser::parse_identifier_expression(this Parser &self) -> AST::NodeID {
     const auto &token = self.expect(self.next(), TokenKind::eIdentifier);
     auto identifier_str = self.module->allocator.alloc_str(token.string(self.source));
 
-    auto identifier_expr = AST::IdentifierExpression{};
-    identifier_expr.identifier_str = identifier_str;
+    auto identifier_expression = AST::IdentifierExpression{};
+    identifier_expression.identifier_str = identifier_str;
 
-    return self.module->make_node({ .identifier_expression = identifier_expr });
+    return self.module->make_node({ .identifier_expression = identifier_expression });
 }
 
 auto Parser::parse_const_value_expression(this Parser &self) -> AST::NodeID {
@@ -434,19 +449,19 @@ auto Parser::parse_const_value_expression(this Parser &self) -> AST::NodeID {
         }
     }
 
-    auto const_decimal_expr = AST::ConstantValueExpression{};
-    const_decimal_expr.value = expr_value;
+    auto const_decimal_expression = AST::ConstantValueExpression{};
+    const_decimal_expression.value = expr_value;
 
-    return self.module->make_node({ .const_value_expression = const_decimal_expr });
+    return self.module->make_node({ .const_value_expression = const_decimal_expression });
 }
 
-auto Parser::parse_call_function_expression(this Parser &self, AST::NodeID lhs_expr_id) -> AST::NodeID {
+auto Parser::parse_call_function_expression(this Parser &self, AST::NodeID lhs_expression_id) -> AST::NodeID {
     self.expect(self.next(), TokenKind::eParenLeft);
     auto expressions = self.parse_expression_list(TokenKind::eParenRight);
     self.expect(self.next(), TokenKind::eParenRight);
 
     auto call_function_expression = AST::CallFunctionExpression{};
-    call_function_expression.function_expression_id = lhs_expr_id;
+    call_function_expression.function_expression_id = lhs_expression_id;
     call_function_expression.parameter_expression_ids = self.module->copy_into(Span(expressions));
 
     return self.module->make_node({ .call_function_expression = call_function_expression });

@@ -187,6 +187,11 @@ auto visit_ast(demir::AST::Module *module, demir::AST::NodeID node_id, int depth
             fmt::println("Expression statement:");
             visit_ast(module, node->expression_statement.expression_id, depth + w);
         } break;
+        case demir::AST::NodeKind::eWhileStatement: {
+            fmt::println("While statement:");
+            visit_ast(module, node->while_statement.condition_expression_id, depth + w);
+            visit_ast(module, node->while_statement.body_statement_id, depth + w);
+        } break;
         case demir::AST::NodeKind::eNone:;
     }
 }
