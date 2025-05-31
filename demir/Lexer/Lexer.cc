@@ -85,7 +85,7 @@ auto Lexer::read_number(this Lexer &self) -> Token {
 
     do {
         self.consume();
-    } while (is_digit(self.peek()) || self.peek() == '.');
+    } while (is_digit(self.peek()) || (self.peek() == '.' && is_digit(self.peek(1))));
 
     // TODO: Handle 1eX values
     auto number_str = std::string_view(self.buffer_view.data() + start_off, self.offset - start_off);
@@ -269,6 +269,23 @@ auto Lexer::next_token(this Lexer &self) -> Token {
         }
         case '.': {
             self.consume();
+            if (self.peek() == '.') {
+                self.consume();
+                switch (self.peek()) {
+                    case '.': {
+                        self.consume();
+                        return Token(TokenKind::eEllipsis, Location(start, 3));
+                    } break;
+                    case '=': {
+                        self.consume();
+                        return Token(TokenKind::eRangeEqual, Location(start, 3));
+                    } break;
+                    default:;
+                }
+
+                return Token(TokenKind::eRange, Location(start, 2));
+            }
+
             return Token(TokenKind::eDot, cur_loc);
         }
         case '/': {

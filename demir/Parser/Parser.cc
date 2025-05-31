@@ -21,6 +21,10 @@ auto token_kind_to_precedence(TokenKind kind) -> AST::Precedence {
         case TokenKind::eDivEqual: {
             prec = AST::Precedence::eAssignment;
         } break;
+        case TokenKind::eRange:
+        case TokenKind::eRangeEqual: {
+            prec = AST::Precedence::eRange;
+        } break;
         case TokenKind::eLogicalOr: {
             prec = AST::Precedence::eLogicalOr;
         } break;
@@ -99,6 +103,10 @@ auto token_kind_to_binary_op(TokenKind kind) -> Option<AST::BinaryOp> {
             return AST::BinaryOp::eShiftLeft;
         case TokenKind::eShiftRight:
             return AST::BinaryOp::eShiftRight;
+        case TokenKind::eRange:
+            return AST::BinaryOp::eRightExclusiveRange;
+        case TokenKind::eRangeEqual:
+            return AST::BinaryOp::eRightInclusiveRange;
         default:;
     }
 
@@ -412,7 +420,7 @@ auto Parser::parse_multiway_branch_statement(this Parser &self) -> AST::NodeID {
             break;
         }
 
-        // assign default case, hopefully '?' will throw parser error
+        // assign default case, hopefully later '?' tokens after that will throw parser error
         if (self.peek().is(TokenKind::eQuestion) && default_case_statement_id == AST::NodeID::Invalid) {
             self.next();
             self.expect(self.next(), TokenKind::eShipRight);

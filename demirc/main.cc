@@ -44,6 +44,10 @@ auto binary_op_to_str(demir::AST::BinaryOp op) -> std::string_view {
             return "BIT SHIFT LEFT";
         case demir::AST::BinaryOp::eShiftRight:
             return "BIT SHIFT RIGHT";
+        case demir::AST::BinaryOp::eRightExclusiveRange:
+            return "RIGHT EXCLUSIVE RANGE";
+        case demir::AST::BinaryOp::eRightInclusiveRange:
+            return "RIGHT INCLUSIVE RANGE";
     }
 
     return "???";

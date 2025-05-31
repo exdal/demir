@@ -24,6 +24,7 @@ enum struct Precedence : i32 {
     eInvalid = -1,
     eComma,
     eAssignment,
+    eRange,
     eLogicalOr,
     eLogicalAnd,
     eBitOr,
@@ -110,6 +111,9 @@ enum struct BinaryOp : u32 {
 
     eShiftLeft, // <<
     eShiftRight, // >>
+
+    eRightExclusiveRange, // ..
+    eRightInclusiveRange, // ..=
 };
 
 struct BinaryExpression {
