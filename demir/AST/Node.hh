@@ -54,6 +54,7 @@ enum class NodeKind : u32 {
     eExpressionStatement,
     eWhileStatement,
     eBranchStatement,
+    eMultiwayBranchStatement,
 };
 
 enum struct NodeID : u32 { Invalid = ~0_u32 };
@@ -186,6 +187,19 @@ struct BranchStatement {
     NodeID false_case_statement_id = NodeID::Invalid;
 };
 
+struct MultiwayBranchStatement {
+    struct Case {
+        NodeID condition_expression_id = NodeID::Invalid;
+        NodeID case_statement_id = NodeID::Invalid;
+    };
+
+    NodeKind kind = NodeKind::eMultiwayBranchStatement;
+
+    NodeID condition_expression_id = NodeID::Invalid;
+    NodeArray<Case> cases = {};
+    NodeID default_case_statement_id = NodeID::Invalid;
+};
+
 union Node {
     NodeKind kind = NodeKind::eNone;
 
@@ -204,5 +218,6 @@ union Node {
     ExpressionStatement expression_statement;
     WhileStatement while_statement;
     BranchStatement branch_statement;
+    MultiwayBranchStatement multiway_branch_statement;
 };
 } // namespace demir::AST

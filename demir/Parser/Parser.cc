@@ -239,6 +239,9 @@ auto Parser::parse_single_statement(this Parser &self) -> AST::NodeID {
         case TokenKind::eIf: {
             return self.parse_branch_statement();
         }
+        case TokenKind::eMatch: {
+            return self.parse_multiway_branch_statement();
+        }
         default: {
             throw ParserUnexpectedTokenError(token.location);
         }
@@ -394,6 +397,49 @@ auto Parser::parse_branch_statement(this Parser &self) -> AST::NodeID {
     branch_statement.false_case_statement_id = false_case_statement_id;
 
     return self.module->make_node({ .branch_statement = branch_statement });
+}
+
+auto Parser::parse_multiway_branch_statement(this Parser &self) -> AST::NodeID {
+    self.expect(self.next(), TokenKind::eMatch);
+
+    auto condition_expression_id = self.parse_expression();
+    self.expect(self.next(), TokenKind::eBraceLeft);
+
+    auto cases = std::vector<AST::MultiwayBranchStatement::Case>();
+    auto default_case_statement_id = AST::NodeID::Invalid;
+    while (!self.peek().is(TokenKind::eEof)) {
+        if (self.peek().is(TokenKind::eBraceRight)) {
+            break;
+        }
+
+        // assign default case, hopefully '?' will throw parser error
+        if (self.peek().is(TokenKind::eQuestion) && default_case_statement_id == AST::NodeID::Invalid) {
+            self.next();
+            self.expect(self.next(), TokenKind::eShipRight);
+            default_case_statement_id = self.parse_statement();
+            continue;
+        }
+
+        auto case_condition_expression_id = self.parse_expression();
+        self.expect(self.next(), TokenKind::eShipRight);
+        auto case_statement_id = self.parse_statement();
+
+        cases.push_back({ .condition_expression_id = case_condition_expression_id, .case_statement_id = case_statement_id });
+
+        // Comma is optional
+        if (self.peek().is(TokenKind::eComma)) {
+            self.next();
+        }
+    }
+
+    self.expect(self.next(), TokenKind::eBraceRight);
+
+    auto multiway_branch_statement = AST::MultiwayBranchStatement{};
+    multiway_branch_statement.condition_expression_id = condition_expression_id;
+    multiway_branch_statement.cases = self.module->copy_into(Span(cases));
+    multiway_branch_statement.default_case_statement_id = default_case_statement_id;
+
+    return self.module->make_node({ .multiway_branch_statement = multiway_branch_statement });
 }
 
 auto Parser::parse_expression(this Parser &self, AST::Precedence precedence) -> AST::NodeID {

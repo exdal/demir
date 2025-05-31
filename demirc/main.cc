@@ -214,6 +214,23 @@ auto visit_ast(demir::AST::Module *module, demir::AST::NodeID node_id, int depth
                 visit_ast(module, node->branch_statement.false_case_statement_id, depth + w);
             }
         } break;
+        case demir::AST::NodeKind::eMultiwayBranchStatement: {
+            fmt::println("Multiway branch statement:");
+            fmt::print("{:{}}", "", depth);
+            fmt::println("Condition:");
+            visit_ast(module, node->multiway_branch_statement.condition_expression_id, depth + w);
+
+            fmt::print("{:{}}", "", depth);
+            fmt::println("Cases:");
+            for (const auto &v : node->multiway_branch_statement.cases) {
+                visit_ast(module, v.condition_expression_id, depth + w);
+                visit_ast(module, v.case_statement_id, depth + w);
+            }
+
+            fmt::print("{:{}}", "", depth);
+            fmt::println("Default case:");
+            visit_ast(module, node->multiway_branch_statement.default_case_statement_id, depth + w);
+        } break;
         case demir::AST::NodeKind::eNone:;
     }
 }
