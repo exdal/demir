@@ -338,7 +338,7 @@ auto Parser::parse_return_statement(this Parser &self) -> AST::NodeID {
 
     auto return_type_expression_id = AST::NodeID::Invalid;
     if (!self.peek().is(TokenKind::eSemiColon)) {
-        return_type_expression_id = self.parse_expression();
+        return_type_expression_id = self.parse_expression(AST::Precedence::eAssignment);
     }
 
     self.expect(self.next(), TokenKind::eSemiColon);
@@ -423,21 +423,27 @@ auto Parser::parse_multiway_branch_statement(this Parser &self) -> AST::NodeID {
         // assign default case, hopefully later '?' tokens after that will throw parser error
         if (self.peek().is(TokenKind::eQuestion) && default_case_statement_id == AST::NodeID::Invalid) {
             self.next();
+
             self.expect(self.next(), TokenKind::eShipRight);
-            default_case_statement_id = self.parse_statement();
+
+            // Force multi statement
+            self.expect(TokenKind::eBraceLeft);
+            default_case_statement_id = self.parse_multi_statement();
+            
             continue;
         }
 
         auto case_condition_expression_id = self.parse_expression();
         self.expect(self.next(), TokenKind::eShipRight);
-        auto case_statement_id = self.parse_statement();
 
-        cases.push_back({ .condition_expression_id = case_condition_expression_id, .case_statement_id = case_statement_id });
+        // Force multi statement
+        auto case_statement_id = self.parse_multi_statement();
 
-        // Comma is optional
         if (self.peek().is(TokenKind::eComma)) {
             self.next();
         }
+
+        cases.push_back({ .condition_expression_id = case_condition_expression_id, .case_statement_id = case_statement_id });
     }
 
     self.expect(self.next(), TokenKind::eBraceRight);
