@@ -1,16 +1,16 @@
-#include "demir/AST/Allocator.hh"
+#include "demir/Core/BumpAllocator.hh"
 
-namespace demir::AST {
-Allocator::Allocator() : root(static_cast<Page *>(operator new(sizeof(Page)))) {
+namespace demir {
+BumpAllocator::BumpAllocator() : root(static_cast<Page *>(operator new(sizeof(Page)))) {
     root->next = nullptr;
 }
 
-Allocator::Allocator(Allocator &&rhs) noexcept : root(rhs.root), offset(rhs.offset) {
+BumpAllocator::BumpAllocator(BumpAllocator &&rhs) noexcept : root(rhs.root), offset(rhs.offset) {
     rhs.root = nullptr;
     rhs.offset = 0;
 }
 
-Allocator::~Allocator() {
+BumpAllocator::~BumpAllocator() {
     Page *page = root;
     while (page) {
         Page *next = page->next;
@@ -19,7 +19,7 @@ Allocator::~Allocator() {
     }
 }
 
-auto Allocator::allocate(usize size) -> void * {
+auto BumpAllocator::allocate(usize size) -> void * {
     constexpr auto align = alignof(void *) > alignof(double) ? alignof(void *) : alignof(double);
 
     if (root) {
@@ -42,7 +42,7 @@ auto Allocator::allocate(usize size) -> void * {
     return page->data;
 }
 
-auto Allocator::alloc_str(std::string_view str) -> std::string_view {
+auto BumpAllocator::alloc_str(std::string_view str) -> std::string_view {
     auto chars = static_cast<c8 *>(allocate(str.length() + 1));
     std::memcpy(chars, str.data(), str.length());
     chars[str.length()] = '\0';
@@ -50,4 +50,4 @@ auto Allocator::alloc_str(std::string_view str) -> std::string_view {
     return { chars, str.length() };
 }
 
-} // namespace demir::AST
+}

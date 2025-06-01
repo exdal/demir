@@ -9,6 +9,7 @@ struct Parser {
     Span<Token> tokens = {};
     u32 token_offset = 0;
     AST::Module *module = nullptr;
+    BumpAllocator *allocator = nullptr;
 
     auto parse(this Parser &) -> AST::ModulePtr;
     static auto parse(std::string_view source) -> AST::ModulePtr;

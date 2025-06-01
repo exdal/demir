@@ -144,6 +144,7 @@ auto Parser::parse(std::string_view source) -> AST::ModulePtr {
 auto Parser::parse(this Parser &self) -> AST::ModulePtr {
     auto module = std::make_unique<AST::Module>();
     self.module = module.get();
+    self.allocator = &module->allocator;
     auto root_statement_id = module->make_node({ .multi_statement = {} });
     self.module->root_node_id = root_statement_id;
 
@@ -159,7 +160,7 @@ auto Parser::parse(this Parser &self) -> AST::ModulePtr {
     }
 
     auto *root_statement = module->get_node(root_statement_id);
-    root_statement->multi_statement.statement_ids = module->copy_into(Span(statements));
+    root_statement->multi_statement.statement_ids = self.allocator->copy_into(Span(statements));
 
     return std::move(module);
 }
@@ -218,7 +219,7 @@ auto Parser::parse_multi_statement(this Parser &self) -> AST::NodeID {
     self.expect(self.next(), TokenKind::eBraceRight);
 
     auto multi_statement = AST::MultiStatement{};
-    multi_statement.statement_ids = self.module->copy_into(Span(statement_ids));
+    multi_statement.statement_ids = self.allocator->copy_into(Span(statement_ids));
 
     return self.module->make_node({ .multi_statement = multi_statement });
 }
@@ -338,7 +339,7 @@ auto Parser::parse_function_decl_statement(this Parser &self) -> AST::NodeID {
 
     auto decl_function_statement = AST::DeclareFunctionStatement{};
     decl_function_statement.identifier_expression_id = identifier_expression;
-    decl_function_statement.parameters = self.module->copy_into(Span(params));
+    decl_function_statement.parameters = self.allocator->copy_into(Span(params));
     decl_function_statement.return_type_expression_id = return_type_expression;
     decl_function_statement.body_statement_id = body_statement;
 
@@ -413,7 +414,7 @@ auto Parser::parse_branch_statement(this Parser &self) -> AST::NodeID {
     }
 
     auto branch_statement = AST::BranchStatement{};
-    branch_statement.conditions = self.module->copy_into(Span(conditions));
+    branch_statement.conditions = self.allocator->copy_into(Span(conditions));
     branch_statement.false_case_statement_id = false_case_statement_id;
 
     return self.module->make_node({ .branch_statement = branch_statement });
@@ -425,45 +426,45 @@ auto Parser::parse_multiway_branch_statement(this Parser &self) -> AST::NodeID {
     auto condition_expression_id = self.parse_expression();
     self.expect(self.next(), TokenKind::eBraceLeft);
 
-    auto cases = std::vector<AST::MultiwayBranchStatement::Case>();
-    auto default_case_statement_id = AST::NodeID::Invalid;
+    auto branches = std::vector<AST::MultiwayBranchStatement::Branch>();
+    auto default_statement_id = AST::NodeID::Invalid;
     while (!self.peek().is(TokenKind::eEof)) {
         if (self.peek().is(TokenKind::eBraceRight)) {
             break;
         }
 
         // assign default case, hopefully later '?' tokens after that will throw parser error
-        if (self.peek().is(TokenKind::eQuestion) && default_case_statement_id == AST::NodeID::Invalid) {
+        if (self.peek().is(TokenKind::eQuestion) && default_statement_id == AST::NodeID::Invalid) {
             self.next();
 
             self.expect(self.next(), TokenKind::eShipRight);
 
             // Force multi statement
             self.expect(TokenKind::eBraceLeft);
-            default_case_statement_id = self.parse_multi_statement();
+            default_statement_id = self.parse_multi_statement();
 
             continue;
         }
 
-        auto case_condition_expression_id = self.parse_expression();
+        auto branch_expression_id = self.parse_expression();
         self.expect(self.next(), TokenKind::eShipRight);
 
         // Force multi statement
-        auto case_statement_id = self.parse_multi_statement();
+        auto branch_statement_id = self.parse_multi_statement();
 
         if (self.peek().is(TokenKind::eComma)) {
             self.next();
         }
 
-        cases.push_back({ .condition_expression_id = case_condition_expression_id, .case_statement_id = case_statement_id });
+        branches.push_back({ .expression_id = branch_expression_id, .statement_id = branch_statement_id });
     }
 
     self.expect(self.next(), TokenKind::eBraceRight);
 
     auto multiway_branch_statement = AST::MultiwayBranchStatement{};
-    multiway_branch_statement.condition_expression_id = condition_expression_id;
-    multiway_branch_statement.cases = self.module->copy_into(Span(cases));
-    multiway_branch_statement.default_case_statement_id = default_case_statement_id;
+    multiway_branch_statement.selector_expression_id = condition_expression_id;
+    multiway_branch_statement.branches = self.allocator->copy_into(Span(branches));
+    multiway_branch_statement.default_statement_id = default_statement_id;
 
     return self.module->make_node({ .multiway_branch_statement = multiway_branch_statement });
 }
@@ -617,7 +618,7 @@ auto Parser::parse_call_function_expression(this Parser &self, AST::NodeID lhs_e
 
     auto call_function_expression = AST::CallFunctionExpression{};
     call_function_expression.function_expression_id = lhs_expression_id;
-    call_function_expression.parameter_expression_ids = self.module->copy_into(Span(expressions));
+    call_function_expression.parameter_expression_ids = self.allocator->copy_into(Span(expressions));
 
     return self.module->make_node({ .call_function_expression = call_function_expression });
 }

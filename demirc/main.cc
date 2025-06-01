@@ -222,18 +222,18 @@ auto visit_ast(demir::AST::Module *module, demir::AST::NodeID node_id, int depth
             fmt::println("Multiway branch statement:");
             fmt::print("{:{}}", "", depth);
             fmt::println("Condition:");
-            visit_ast(module, node->multiway_branch_statement.condition_expression_id, depth + w);
+            visit_ast(module, node->multiway_branch_statement.selector_expression_id, depth + w);
 
             fmt::print("{:{}}", "", depth);
             fmt::println("Cases:");
-            for (const auto &v : node->multiway_branch_statement.cases) {
-                visit_ast(module, v.condition_expression_id, depth + w);
-                visit_ast(module, v.case_statement_id, depth + w);
+            for (const auto &v : node->multiway_branch_statement.branches) {
+                visit_ast(module, v.expression_id, depth + w);
+                visit_ast(module, v.statement_id, depth + w);
             }
 
             fmt::print("{:{}}", "", depth);
             fmt::println("Default case:");
-            visit_ast(module, node->multiway_branch_statement.default_case_statement_id, depth + w);
+            visit_ast(module, node->multiway_branch_statement.default_statement_id, depth + w);
         } break;
         case demir::AST::NodeKind::eBreakStatement: {
             fmt::println("Break statement");

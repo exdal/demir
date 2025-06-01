@@ -1,25 +1,12 @@
 #pragma once
 
 #include "demir/AST/ExpressionType.hh"
+#include "demir/Core/Span.hh"
 #include "demir/Core/Types.hh"
 
 #include <string_view>
 
 namespace demir::AST {
-template<typename T>
-struct NodeArray {
-    T *data = nullptr;
-    usize size = 0;
-
-    auto begin() const -> const T * {
-        return data;
-    }
-
-    auto end() const -> const T * {
-        return data + size;
-    }
-};
-
 enum struct Precedence : i32 {
     eInvalid = -1,
     eComma,
@@ -130,14 +117,14 @@ struct CallFunctionExpression {
     NodeKind kind = NodeKind::eCallFunctionExpression;
 
     NodeID function_expression_id = NodeID::Invalid;
-    NodeArray<NodeID> parameter_expression_ids = {};
+    Span<NodeID> parameter_expression_ids = {};
 };
 
 // Statements
 struct MultiStatement {
     NodeKind kind = NodeKind::eMultiStatement;
 
-    NodeArray<NodeID> statement_ids = {};
+    Span<NodeID> statement_ids = {};
 };
 
 struct DeclareVarStatement {
@@ -157,7 +144,7 @@ struct DeclareFunctionStatement {
     NodeKind kind = NodeKind::eDeclareFunctionStatement;
 
     NodeID identifier_expression_id = NodeID::Invalid;
-    NodeArray<Parameter> parameters = {};
+    Span<Parameter> parameters = {};
     NodeID return_type_expression_id = NodeID::Invalid;
     NodeID body_statement_id = NodeID::Invalid;
 };
@@ -189,21 +176,21 @@ struct BranchStatement {
 
     NodeKind kind = NodeKind::eBranchStatement;
 
-    NodeArray<Condition> conditions = {};
+    Span<Condition> conditions = {};
     NodeID false_case_statement_id = NodeID::Invalid;
 };
 
 struct MultiwayBranchStatement {
-    struct Case {
-        NodeID condition_expression_id = NodeID::Invalid;
-        NodeID case_statement_id = NodeID::Invalid;
+    struct Branch {
+        NodeID expression_id = NodeID::Invalid;
+        NodeID statement_id = NodeID::Invalid;
     };
 
     NodeKind kind = NodeKind::eMultiwayBranchStatement;
 
-    NodeID condition_expression_id = NodeID::Invalid;
-    NodeArray<Case> cases = {};
-    NodeID default_case_statement_id = NodeID::Invalid;
+    NodeID selector_expression_id = NodeID::Invalid;
+    NodeID default_statement_id = NodeID::Invalid;
+    Span<Branch> branches = {};
 };
 
 struct BreakStatement {
