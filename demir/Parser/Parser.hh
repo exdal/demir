@@ -1,20 +1,30 @@
 #pragma once
 
-#include "demir/AST/Module.hh"
+#include "demir/AST/Node.hh"
+#include "demir/Core/BumpAllocator.hh"
 #include "demir/Lexer/Token.hh"
 
 namespace demir {
+struct ParserResult {
+    std::vector<AST::Node> nodes = {};
+    AST::NodeID root_node_id = AST::NodeID::Invalid;
+};
+
 struct Parser {
     std::string_view source = {};
     Span<Token> tokens = {};
     u32 token_offset = 0;
-    AST::Module *module = nullptr;
+
+    std::vector<AST::Node> nodes = {};
     BumpAllocator *allocator = nullptr;
 
-    auto parse(this Parser &) -> AST::ModulePtr;
-    static auto parse(std::string_view source) -> AST::ModulePtr;
+    auto parse(this Parser &, BumpAllocator *allocator, std::string_view source, Span<Token> tokens) -> ParserResult;
+    static auto parse(BumpAllocator *allocator, std::string_view source) -> ParserResult;
 
 private:
+    auto make_node(const AST::Node &node) -> AST::NodeID; // intentionally doesn't contain deducing this
+    auto get_node(this Parser &, AST::NodeID node_id) -> AST::Node *;
+
     auto peek(this Parser &, u32 look_ahead = 0) -> const Token &;
     auto expect(this Parser &, const Token &token, TokenKind kind) -> const Token &;
     auto expect(this Parser &, TokenKind kind) -> const Token &;

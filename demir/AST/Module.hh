@@ -1,25 +1,18 @@
 #pragma once
 
-#include "demir/Core/BumpAllocator.hh"
-
 #include "demir/AST/Node.hh"
-#include "demir/IR/Module.hh"
 
-#include <memory>
 #include <vector>
 
 namespace demir::AST {
 struct Module {
     std::vector<Node> nodes = {};
     NodeID root_node_id = NodeID::Invalid;
-    BumpAllocator allocator = {};
 
-    auto make_node(const Node &node) -> NodeID; // intentionally doesn't contain deducing this
-    auto get_node(this Module &, NodeID node_id) -> Node *;
+    Module() = default;
+    Module(std::vector<Node> nodes_, NodeID root_node_id_) : nodes(std::move(nodes_)), root_node_id(root_node_id_) {}
 
-    auto lower() -> IR::ModulePtr;
+    auto get_node(this Module &, AST::NodeID node_id) -> AST::Node *;
 };
-
-using ModulePtr = std::unique_ptr<Module>;
 
 } // namespace demir::AST

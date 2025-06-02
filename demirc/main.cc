@@ -1,5 +1,6 @@
-#include "demir/Parser/Parser.hh"
+#include "demir/AST/Module.hh"
 #include "demir/AST/Visitor.hh"
+#include "demir/Parser/Parser.hh"
 
 #include <demir/demir.hh>
 
@@ -293,9 +294,11 @@ int main(int argc, char *argv[]) {
     file.seekg(0);
     file.read(source.data(), static_cast<std::streamsize>(source.length()));
 
-    auto module = demir::Parser::parse(source);
-    auto ast_module_printer = PrinterVisitor(module.get());
-    ast_module_printer.visit(module->root_node_id);
+    auto allocator = demir::BumpAllocator{};
+    auto parse_result = demir::Parser::parse(&allocator, source);
+    auto ast_module = demir::AST::Module(std::move(parse_result.nodes), parse_result.root_node_id);
+    auto ast_module_printer = PrinterVisitor(&ast_module);
+    ast_module_printer.visit(ast_module.root_node_id);
 
     return 0;
 }

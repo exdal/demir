@@ -132,21 +132,18 @@ auto token_kind_to_assignment_type(TokenKind kind) -> Option<AST::AssignmentType
     return nullopt;
 }
 
-auto Parser::parse(std::string_view source) -> AST::ModulePtr {
+auto Parser::parse(BumpAllocator *allocator, std::string_view source) -> ParserResult {
     auto tokens = Lexer::tokenize(source);
-    auto parser = Parser{
-        .source = source,
-        .tokens = tokens,
-    };
-    return parser.parse();
+    auto parser = Parser{};
+    return parser.parse(allocator, source, tokens);
 }
 
-auto Parser::parse(this Parser &self) -> AST::ModulePtr {
-    auto module = std::make_unique<AST::Module>();
-    self.module = module.get();
-    self.allocator = &module->allocator;
-    auto root_statement_id = module->make_node({ .multi_statement = {} });
-    self.module->root_node_id = root_statement_id;
+auto Parser::parse(this Parser &self, BumpAllocator *allocator, std::string_view source, Span<Token> tokens) -> ParserResult {
+    self.allocator = allocator;
+    self.source = source;
+    self.tokens = tokens;
+
+    auto root_statement_id = self.make_node({ .multi_statement = {} });
 
     auto statements = std::vector<AST::NodeID>();
     while (!self.peek().is(TokenKind::eEof)) {
@@ -159,10 +156,29 @@ auto Parser::parse(this Parser &self) -> AST::ModulePtr {
         statements.push_back(statement_id);
     }
 
-    auto *root_statement = module->get_node(root_statement_id);
+    auto *root_statement = self.get_node(root_statement_id);
     root_statement->multi_statement.statement_ids = self.allocator->copy_into(Span(statements));
 
-    return std::move(module);
+    return ParserResult{
+        .nodes = std::move(self.nodes),
+        .root_node_id = root_statement_id,
+    };
+}
+
+auto Parser::make_node(const AST::Node &node) -> AST::NodeID {
+    auto nodes_count = this->nodes.size();
+    this->nodes.emplace_back(node);
+
+    return static_cast<AST::NodeID>(nodes_count);
+}
+
+auto Parser::get_node(this Parser &self, AST::NodeID node_id) -> AST::Node * {
+    auto node_index = std::to_underlying(node_id);
+    if (node_index >= self.nodes.size()) {
+        return nullptr;
+    }
+
+    return &self.nodes[node_index];
 }
 
 auto Parser::peek(this Parser &self, u32 look_ahead) -> const Token & {
@@ -221,7 +237,7 @@ auto Parser::parse_multi_statement(this Parser &self) -> AST::NodeID {
     auto multi_statement = AST::MultiStatement{};
     multi_statement.statement_ids = self.allocator->copy_into(Span(statement_ids));
 
-    return self.module->make_node({ .multi_statement = multi_statement });
+    return self.make_node({ .multi_statement = multi_statement });
 }
 
 auto Parser::parse_single_statement(this Parser &self) -> AST::NodeID {
@@ -255,13 +271,13 @@ auto Parser::parse_single_statement(this Parser &self) -> AST::NodeID {
             self.next();
             self.expect(self.next(), TokenKind::eSemiColon);
 
-            return self.module->make_node({ .break_statement = {} });
+            return self.make_node({ .break_statement = {} });
         }
         case TokenKind::eContinue: {
             self.next();
             self.expect(self.next(), TokenKind::eSemiColon);
 
-            return self.module->make_node({ .continue_statement = {} });
+            return self.make_node({ .continue_statement = {} });
         }
         default: {
             throw ParserUnexpectedTokenError(token.location);
@@ -297,7 +313,7 @@ auto Parser::parse_variable_decl_statement(this Parser &self) -> AST::NodeID {
     decl_var_statement.type_expression_id = type_expression_id;
     decl_var_statement.initial_expression_id = initial_expression_id;
 
-    return self.module->make_node({ .decl_var_statement = decl_var_statement });
+    return self.make_node({ .decl_var_statement = decl_var_statement });
 }
 
 auto Parser::parse_function_decl_statement(this Parser &self) -> AST::NodeID {
@@ -343,7 +359,7 @@ auto Parser::parse_function_decl_statement(this Parser &self) -> AST::NodeID {
     decl_function_statement.return_type_expression_id = return_type_expression;
     decl_function_statement.body_statement_id = body_statement;
 
-    return self.module->make_node({ .decl_function_statement = decl_function_statement });
+    return self.make_node({ .decl_function_statement = decl_function_statement });
 }
 
 auto Parser::parse_return_statement(this Parser &self) -> AST::NodeID {
@@ -359,7 +375,7 @@ auto Parser::parse_return_statement(this Parser &self) -> AST::NodeID {
     auto return_statement = AST::ReturnStatement{};
     return_statement.return_expression_id = return_type_expression_id;
 
-    return self.module->make_node({ .return_statement = return_statement });
+    return self.make_node({ .return_statement = return_statement });
 }
 
 auto Parser::parse_expression_statement(this Parser &self) -> AST::NodeID {
@@ -369,7 +385,7 @@ auto Parser::parse_expression_statement(this Parser &self) -> AST::NodeID {
     auto expression_statement = AST::ExpressionStatement{};
     expression_statement.expression_id = lhs_expression_id;
 
-    return self.module->make_node({ .expression_statement = expression_statement });
+    return self.make_node({ .expression_statement = expression_statement });
 }
 
 auto Parser::parse_while_statement(this Parser &self) -> AST::NodeID {
@@ -381,7 +397,7 @@ auto Parser::parse_while_statement(this Parser &self) -> AST::NodeID {
     while_statement.condition_expression_id = condition_expression_id;
     while_statement.body_statement_id = body_statement_id;
 
-    return self.module->make_node({ .while_statement = while_statement });
+    return self.make_node({ .while_statement = while_statement });
 }
 
 auto Parser::parse_branch_statement(this Parser &self) -> AST::NodeID {
@@ -417,7 +433,7 @@ auto Parser::parse_branch_statement(this Parser &self) -> AST::NodeID {
     branch_statement.conditions = self.allocator->copy_into(Span(conditions));
     branch_statement.false_case_statement_id = false_case_statement_id;
 
-    return self.module->make_node({ .branch_statement = branch_statement });
+    return self.make_node({ .branch_statement = branch_statement });
 }
 
 auto Parser::parse_multiway_branch_statement(this Parser &self) -> AST::NodeID {
@@ -466,7 +482,7 @@ auto Parser::parse_multiway_branch_statement(this Parser &self) -> AST::NodeID {
     multiway_branch_statement.branches = self.allocator->copy_into(Span(branches));
     multiway_branch_statement.default_statement_id = default_statement_id;
 
-    return self.module->make_node({ .multiway_branch_statement = multiway_branch_statement });
+    return self.make_node({ .multiway_branch_statement = multiway_branch_statement });
 }
 
 auto Parser::parse_expression(this Parser &self, AST::Precedence precedence) -> AST::NodeID {
@@ -505,7 +521,7 @@ auto Parser::parse_expression_with_precedence(this Parser &self, AST::Precedence
             assign_expression.lhs_expression_id = lhs_expression_id;
             assign_expression.rhs_expression_id = rhs_expression_id;
 
-            return self.module->make_node({ .assign_expression = assign_expression });
+            return self.make_node({ .assign_expression = assign_expression });
         } else {
             auto binary_op = token_kind_to_binary_op(op_kind);
             if (!binary_op.has_value()) {
@@ -517,7 +533,7 @@ auto Parser::parse_expression_with_precedence(this Parser &self, AST::Precedence
             binary_op_expression.lhs_expression_id = lhs_expression_id;
             binary_op_expression.rhs_expression_id = rhs_expression_id;
 
-            return self.module->make_node({ .binary_expression = binary_op_expression });
+            return self.make_node({ .binary_expression = binary_op_expression });
         }
     }
 
@@ -564,12 +580,12 @@ auto Parser::parse_expression_list(this Parser &self, TokenKind terminator) -> s
 
 auto Parser::parse_identifier_expression(this Parser &self) -> AST::NodeID {
     const auto &token = self.expect(self.next(), TokenKind::eIdentifier);
-    auto identifier_str = self.module->allocator.alloc_str(token.string(self.source));
+    auto identifier_str = self.allocator->alloc_str(token.string(self.source));
 
     auto identifier_expression = AST::IdentifierExpression{};
     identifier_expression.identifier_str = identifier_str;
 
-    return self.module->make_node({ .identifier_expression = identifier_expression });
+    return self.make_node({ .identifier_expression = identifier_expression });
 }
 
 auto Parser::parse_const_value_expression(this Parser &self) -> AST::NodeID {
@@ -587,7 +603,7 @@ auto Parser::parse_const_value_expression(this Parser &self) -> AST::NodeID {
         } break;
         case TokenKind::eStringLiteral: {
             auto token_str = token.string(self.source);
-            auto expr_str = self.module->allocator.alloc_str(token_str);
+            auto expr_str = self.allocator->alloc_str(token_str);
             expr_value.kind = AST::ExpressionTypeKind::eString;
             expr_value.element_count = token.string_length;
             expr_value.str_val = expr_str.data();
@@ -608,7 +624,7 @@ auto Parser::parse_const_value_expression(this Parser &self) -> AST::NodeID {
     auto const_decimal_expression = AST::ConstantValueExpression{};
     const_decimal_expression.value = expr_value;
 
-    return self.module->make_node({ .const_value_expression = const_decimal_expression });
+    return self.make_node({ .const_value_expression = const_decimal_expression });
 }
 
 auto Parser::parse_call_function_expression(this Parser &self, AST::NodeID lhs_expression_id) -> AST::NodeID {
@@ -620,7 +636,7 @@ auto Parser::parse_call_function_expression(this Parser &self, AST::NodeID lhs_e
     call_function_expression.function_expression_id = lhs_expression_id;
     call_function_expression.parameter_expression_ids = self.allocator->copy_into(Span(expressions));
 
-    return self.module->make_node({ .call_function_expression = call_function_expression });
+    return self.make_node({ .call_function_expression = call_function_expression });
 }
 
 } // namespace demir
