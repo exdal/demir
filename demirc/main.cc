@@ -1,4 +1,6 @@
 #include "demir/Parser/Parser.hh"
+#include "demir/AST/Visitor.hh"
+
 #include <demir/demir.hh>
 
 #include <filesystem>
@@ -70,190 +72,230 @@ auto assignment_to_str(demir::AST::AssignmentType type) -> std::string_view {
     return "???";
 }
 
-auto visit_ast(demir::AST::Module *module, demir::AST::NodeID node_id, int depth) -> void {
-    constexpr int w = 1;
-    fmt::print("{:{}}", "", depth);
-    auto *node = module->get_node(node_id);
-    switch (node->kind) {
-        case demir::AST::NodeKind::eIdentifierExpression: {
-            fmt::println("Identifier expression: {}", node->identifier_expression.identifier_str);
-        } break;
-        case demir::AST::NodeKind::eConstantValueExpression: {
-            fmt::print("Constant value expression: ");
-            switch (node->const_value_expression.value.kind) {
-                case demir::AST::ExpressionTypeKind::eBool: {
-                    fmt::println("{} (bool)", node->const_value_expression.value.bool_val);
-                } break;
-                case demir::AST::ExpressionTypeKind::ei8:
-                case demir::AST::ExpressionTypeKind::eu8:
-                case demir::AST::ExpressionTypeKind::ei16:
-                case demir::AST::ExpressionTypeKind::eu16:
-                case demir::AST::ExpressionTypeKind::ei32:
-                case demir::AST::ExpressionTypeKind::eu32:
-                case demir::AST::ExpressionTypeKind::ei64:
-                case demir::AST::ExpressionTypeKind::eu64: {
-                    fmt::println("{} (integer)", node->const_value_expression.value.u64_val);
-                } break;
-                case demir::AST::ExpressionTypeKind::ef32:
-                case demir::AST::ExpressionTypeKind::ef64: {
-                    fmt::println("{} (floating point)", node->const_value_expression.value.f64_val);
-                } break;
-                case demir::AST::ExpressionTypeKind::eString: {
-                    fmt::println("\"{}\" (string)", node->const_value_expression.value.str_val);
-                } break;
-                default: {
-                    fmt::println("(null)");
-                }
-            }
-        } break;
-        case demir::AST::NodeKind::eAssignExpression: {
-            fmt::println("Assign expression:");
+struct PrinterVisitor : demir::AST::Visitor {
+    using demir::AST::Visitor::visit;
 
-            fmt::print("{:{}}", "", depth);
-            fmt::println("Type: {}", assignment_to_str(node->assign_expression.assign_type));
-            if (node->assign_expression.lhs_expression_id != demir::AST::NodeID::Invalid) {
-                fmt::print("{:{}}", "", depth);
-                fmt::println("LHS:");
-                visit_ast(module, node->assign_expression.lhs_expression_id, depth + w);
-            }
+    int depth = 0;
 
-            if (node->assign_expression.rhs_expression_id != demir::AST::NodeID::Invalid) {
-                fmt::print("{:{}}", "", depth);
-                fmt::println("RHS:");
-                visit_ast(module, node->assign_expression.rhs_expression_id, depth + w);
-            }
-        } break;
-        case demir::AST::NodeKind::eBinaryExpression: {
-            fmt::println("Binary expression:");
-            fmt::print("{:{}}", "", depth);
-            fmt::println("Op: {}", binary_op_to_str(node->binary_expression.op));
-            if (node->binary_expression.lhs_expression_id != demir::AST::NodeID::Invalid) {
-                fmt::print("{:{}}", "", depth);
-                fmt::println("LHS:");
-                visit_ast(module, node->binary_expression.lhs_expression_id, depth + w);
-            }
+    PrinterVisitor() = default;
+    PrinterVisitor(demir::AST::Module *module_) : demir::AST::Visitor(module_) {}
 
-            if (node->binary_expression.rhs_expression_id != demir::AST::NodeID::Invalid) {
-                fmt::print("{:{}}", "", depth);
-                fmt::println("RHS:");
-                visit_ast(module, node->binary_expression.rhs_expression_id, depth + w);
-            }
-        } break;
-        case demir::AST::NodeKind::eCallFunctionExpression: {
-            fmt::println("Call function expression:");
-            visit_ast(module, node->call_function_expression.function_expression_id, depth + w);
-            for (auto expression_id : node->call_function_expression.parameter_expression_ids) {
-                visit_ast(module, expression_id, depth + w);
-            }
-        } break;
-        case demir::AST::NodeKind::eMultiStatement: {
-            fmt::println("Multi statement:");
-            for (auto statement_id : node->multi_statement.statement_ids) {
-                visit_ast(module, statement_id, depth + w);
-            }
-        } break;
-        case demir::AST::NodeKind::eDeclareVarStatement: {
-            fmt::println("Declare var statement:");
-            visit_ast(module, node->decl_var_statement.identifier_expression_id, depth + w);
-            if (node->decl_var_statement.type_expression_id != demir::AST::NodeID::Invalid) {
-                visit_ast(module, node->decl_var_statement.type_expression_id, depth + w);
-            }
-            if (node->decl_var_statement.initial_expression_id != demir::AST::NodeID::Invalid) {
-                visit_ast(module, node->decl_var_statement.initial_expression_id, depth + w);
-            }
-        } break;
-        case demir::AST::NodeKind::eDeclareFunctionStatement: {
-            fmt::println("Declare function statement:");
-            visit_ast(module, node->decl_function_statement.identifier_expression_id, depth + w);
-
-            fmt::print("{:{}}", "", depth);
-            fmt::println("Function parameters:");
-            for (const auto &param : node->decl_function_statement.parameters) {
-                visit_ast(module, param.identifier_expression_id, depth + w);
-                visit_ast(module, param.type_expression_id, depth + w);
-            }
-
-            fmt::print("{:{}}", "", depth);
-            fmt::println("Function return type:");
-            if (node->decl_function_statement.return_type_expression_id != demir::AST::NodeID::Invalid) {
-                visit_ast(module, node->decl_function_statement.return_type_expression_id, depth + w);
-            }
-
-            visit_ast(module, node->decl_function_statement.body_statement_id, depth + w);
-        } break;
-        case demir::AST::NodeKind::eReturnStatement: {
-            fmt::println("Return statement:");
-            if (node->return_statement.return_expression_id != demir::AST::NodeID::Invalid) {
-                visit_ast(module, node->return_statement.return_expression_id, depth + w);
-            }
-        } break;
-        case demir::AST::NodeKind::eExpressionStatement: {
-            fmt::println("Expression statement:");
-            visit_ast(module, node->expression_statement.expression_id, depth + w);
-        } break;
-        case demir::AST::NodeKind::eWhileStatement: {
-            fmt::println("While statement:");
-
-            fmt::print("{:{}}", "", depth);
-            fmt::println("Condition statement:");
-            visit_ast(module, node->while_statement.condition_expression_id, depth + w);
-
-            fmt::print("{:{}}", "", depth);
-            fmt::println("Body statement:");
-            visit_ast(module, node->while_statement.body_statement_id, depth + w);
-        } break;
-        case demir::AST::NodeKind::eBranchStatement: {
-            fmt::println("Branch statement:");
-
-            fmt::print("{:{}}", "", depth);
-            fmt::println("Conditions:");
-            for (const auto &cond : node->branch_statement.conditions) {
-                visit_ast(module, cond.condition_expression_id, depth + w);
-                visit_ast(module, cond.true_case_statement_id, depth + w);
-            }
-
-            if (node->branch_statement.false_case_statement_id != demir::AST::NodeID::Invalid) {
-                fmt::print("{:{}}", "", depth);
-                fmt::println("Else statement:");
-                visit_ast(module, node->branch_statement.false_case_statement_id, depth + w);
-            }
-        } break;
-        case demir::AST::NodeKind::eMultiwayBranchStatement: {
-            fmt::println("Multiway branch statement:");
-            fmt::print("{:{}}", "", depth);
-            fmt::println("Condition:");
-            visit_ast(module, node->multiway_branch_statement.selector_expression_id, depth + w);
-
-            fmt::print("{:{}}", "", depth);
-            fmt::println("Cases:");
-            for (const auto &v : node->multiway_branch_statement.branches) {
-                visit_ast(module, v.expression_id, depth + w);
-                visit_ast(module, v.statement_id, depth + w);
-            }
-
-            fmt::print("{:{}}", "", depth);
-            fmt::println("Default case:");
-            visit_ast(module, node->multiway_branch_statement.default_statement_id, depth + w);
-        } break;
-        case demir::AST::NodeKind::eBreakStatement: {
-            fmt::println("Break statement");
-        } break;
-        case demir::AST::NodeKind::eContinueStatement: {
-            fmt::println("Continue statement");
-        } break;
-        case demir::AST::NodeKind::eNone:;
+    auto push(int size = 1) -> void {
+        depth += size;
     }
-}
+
+    auto pop(int size = 1) -> void {
+        depth -= size;
+    }
+
+    template<typename... Args>
+    constexpr auto print_indented(fmt::format_string<Args...> str, Args &&...args) -> void {
+        fmt::print("{:{}}", "", depth);
+        fmt::println(str, std::forward<Args>(args)...);
+    }
+
+    auto visit(demir::AST::IdentifierExpression &v) -> void override {
+        print_indented("Identifier expression:");
+        push();
+        print_indented("Identifier: {}", v.identifier_str);
+        pop();
+    }
+
+    auto visit(demir::AST::ConstantValueExpression &v) -> void override {
+        print_indented("Constant value expression:");
+        push();
+        switch (v.value.kind) {
+            case demir::AST::ExpressionTypeKind::eBool: {
+                print_indented("Type: {} (bool)", v.value.bool_val);
+            } break;
+            case demir::AST::ExpressionTypeKind::ei8:
+            case demir::AST::ExpressionTypeKind::eu8:
+            case demir::AST::ExpressionTypeKind::ei16:
+            case demir::AST::ExpressionTypeKind::eu16:
+            case demir::AST::ExpressionTypeKind::ei32:
+            case demir::AST::ExpressionTypeKind::eu32:
+            case demir::AST::ExpressionTypeKind::ei64:
+            case demir::AST::ExpressionTypeKind::eu64: {
+                print_indented("Type: {} (integer)", v.value.u64_val);
+            } break;
+            case demir::AST::ExpressionTypeKind::ef32:
+            case demir::AST::ExpressionTypeKind::ef64: {
+                print_indented("Type: {} (floating point)", v.value.f64_val);
+            } break;
+            case demir::AST::ExpressionTypeKind::eString: {
+                print_indented("Type: \"{}\" (string)", v.value.str_val);
+            } break;
+            default: {
+                print_indented("Type: (null)");
+            } break;
+        }
+        pop();
+    }
+
+    auto visit(demir::AST::AssignExpression &v) -> void override {
+        print_indented("Assign expression:");
+        push();
+        print_indented("Type: {}", assignment_to_str(v.assign_type));
+        if (v.lhs_expression_id != demir::AST::NodeID::Invalid) {
+            print_indented("LHS:");
+            visit(v.lhs_expression_id);
+        }
+
+        if (v.rhs_expression_id != demir::AST::NodeID::Invalid) {
+            print_indented("RHS:");
+            visit(v.rhs_expression_id);
+        }
+
+        pop();
+    }
+
+    auto visit(demir::AST::BinaryExpression &v) -> void override {
+        print_indented("Binary expression:");
+        push();
+        print_indented("Op: {}", binary_op_to_str(v.op));
+        if (v.lhs_expression_id != demir::AST::NodeID::Invalid) {
+            print_indented("LHS:");
+            visit(v.lhs_expression_id);
+        }
+
+        if (v.rhs_expression_id != demir::AST::NodeID::Invalid) {
+            print_indented("RHS:");
+            visit(v.rhs_expression_id);
+        }
+        pop();
+    }
+
+    auto visit(demir::AST::CallFunctionExpression &v) -> void override {
+        print_indented("Call function expression:");
+        push();
+        visit(v.function_expression_id);
+        for (auto node_id : v.parameter_expression_ids) {
+            visit(node_id);
+        }
+        pop();
+    }
+
+    auto visit(demir::AST::MultiStatement &v) -> void override {
+        print_indented("Multi statement:");
+        push();
+        for (auto node_id : v.statement_ids) {
+            visit(node_id);
+        }
+        pop();
+    }
+
+    auto visit(demir::AST::DeclareVarStatement &v) -> void override {
+        print_indented("Declare var statement:");
+        push();
+        visit(v.identifier_expression_id);
+
+        if (v.type_expression_id != demir::AST::NodeID::Invalid) {
+            visit(v.type_expression_id);
+        }
+
+        if (v.initial_expression_id != demir::AST::NodeID::Invalid) {
+            visit(v.initial_expression_id);
+        }
+        pop();
+    }
+
+    auto visit(demir::AST::DeclareFunctionStatement &v) -> void override {
+        print_indented("Declare function statement:");
+        push();
+        visit(v.identifier_expression_id);
+        for (const auto &param : v.parameters) {
+            visit(param.identifier_expression_id);
+            visit(param.type_expression_id);
+        }
+
+        if (v.return_type_expression_id != demir::AST::NodeID::Invalid) {
+            print_indented("Return type:");
+            visit(v.return_type_expression_id);
+        }
+
+        visit(v.body_statement_id);
+        pop();
+    }
+
+    auto visit(demir::AST::ReturnStatement &v) -> void override {
+        print_indented("Return statement:");
+        push();
+        if (v.return_expression_id != demir::AST::NodeID::Invalid) {
+            visit(v.return_expression_id);
+        }
+        pop();
+    }
+
+    auto visit(demir::AST::ExpressionStatement &v) -> void override {
+        print_indented("Expression statement:");
+        push();
+        visit(v.expression_id);
+        pop();
+    }
+
+    auto visit(demir::AST::WhileStatement &v) -> void override {
+        print_indented("While statement:");
+        push();
+        print_indented("Condition:");
+        visit(v.condition_expression_id);
+        print_indented("Body:");
+        visit(v.body_statement_id);
+        pop();
+    }
+
+    auto visit(demir::AST::BranchStatement &v) -> void override {
+        print_indented("Branch statement:");
+        push();
+        print_indented("Conditions:");
+        for (const auto &cond : v.conditions) {
+            visit(cond.condition_expression_id);
+            visit(cond.true_case_statement_id);
+        }
+        if (v.false_case_statement_id != demir::AST::NodeID::Invalid) {
+            print_indented("Else:");
+            visit(v.false_case_statement_id);
+        }
+        pop();
+    }
+
+    auto visit(demir::AST::MultiwayBranchStatement &v) -> void override {
+        print_indented("Multiway statement:");
+        push();
+        print_indented("Selector:");
+        visit(v.selector_expression_id);
+        print_indented("Branches:");
+        for (const auto &branch : v.branches) {
+            visit(branch.expression_id);
+            visit(branch.statement_id);
+        }
+
+        if (v.default_statement_id != demir::AST::NodeID::Invalid) {
+            print_indented("Default branch:");
+            visit(v.default_statement_id);
+        }
+
+        pop();
+    }
+
+    auto visit(demir::AST::BreakStatement &v) -> void override {
+        print_indented("Break statement");
+    }
+
+    auto visit(demir::AST::ContinueStatement &v) -> void override {
+        print_indented("Continue statement");
+    }
+};
 
 int main(int argc, char *argv[]) {
     auto source = std::string();
     std::ifstream file(std::filesystem::current_path() / "test.rs", std::ios::binary | std::ios::ate);
     source.resize(file.tellg());
     file.seekg(0);
-    file.read(source.data(), source.length());
+    file.read(source.data(), static_cast<std::streamsize>(source.length()));
 
     auto module = demir::Parser::parse(source);
-    visit_ast(module.get(), module->root_node_id, 0);
+    auto ast_module_printer = PrinterVisitor(module.get());
+    ast_module_printer.visit(module->root_node_id);
 
     return 0;
 }

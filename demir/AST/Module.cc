@@ -18,4 +18,9 @@ auto Module::get_node(this Module &self, NodeID node_id) -> Node * {
 
     return &self.nodes[node_index];
 }
+
+auto Module::lower() -> IR::ModulePtr {
+    return nullptr;
+}
+
 } // namespace demir::AST
