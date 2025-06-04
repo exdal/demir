@@ -31,5 +31,9 @@ target("demir")
         end
     end)
 
-    add_packages("fmt", {public = true})
+    add_packages(
+        "fmt",
+        "unordered_dense",
+        {public = true})
+
 target_end()

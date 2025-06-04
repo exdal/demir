@@ -1,5 +1,6 @@
 #include "demir/AST/Module.hh"
 #include "demir/AST/Visitor.hh"
+#include "demir/IR/Lowering.hh"
 #include "demir/Parser/Parser.hh"
 
 #include <demir/demir.hh>
@@ -73,6 +74,37 @@ auto assignment_to_str(demir::AST::AssignmentType type) -> std::string_view {
     return "???";
 }
 
+auto expression_value_kind_to_str(demir::AST::ExpressionValueKind value_kind) -> std::string_view {
+    switch (value_kind) {
+        case demir::AST::ExpressionValueKind::eBool:
+            return "bool";
+        case demir::AST::ExpressionValueKind::ei8:
+            return "i8";
+        case demir::AST::ExpressionValueKind::eu8:
+            return "u8";
+        case demir::AST::ExpressionValueKind::ei16:
+            return "i16";
+        case demir::AST::ExpressionValueKind::eu16:
+            return "u16";
+        case demir::AST::ExpressionValueKind::ei32:
+            return "i32";
+        case demir::AST::ExpressionValueKind::eu32:
+            return "u32";
+        case demir::AST::ExpressionValueKind::ei64:
+            return "i64";
+        case demir::AST::ExpressionValueKind::eu64:
+            return "u64";
+        case demir::AST::ExpressionValueKind::ef32:
+            return "f32";
+        case demir::AST::ExpressionValueKind::ef64:
+            return "f64";
+        case demir::AST::ExpressionValueKind::eString:
+            return "string";
+        default:
+            return "Unhandled";
+    }
+}
+
 struct PrinterVisitor : demir::AST::Visitor {
     using demir::AST::Visitor::visit;
 
@@ -105,31 +137,32 @@ struct PrinterVisitor : demir::AST::Visitor {
     auto visit(demir::AST::ConstantValueExpression &v) -> void override {
         print_indented("Constant value expression:");
         push();
+        auto kind_str = expression_value_kind_to_str(v.value.kind);
         switch (v.value.kind) {
-            case demir::AST::ExpressionTypeKind::eBool: {
-                print_indented("Type: {} (bool)", v.value.bool_val);
+            case demir::AST::ExpressionValueKind::eBool: {
+                print_indented("Value: {}", v.value.bool_val, kind_str);
             } break;
-            case demir::AST::ExpressionTypeKind::ei8:
-            case demir::AST::ExpressionTypeKind::eu8:
-            case demir::AST::ExpressionTypeKind::ei16:
-            case demir::AST::ExpressionTypeKind::eu16:
-            case demir::AST::ExpressionTypeKind::ei32:
-            case demir::AST::ExpressionTypeKind::eu32:
-            case demir::AST::ExpressionTypeKind::ei64:
-            case demir::AST::ExpressionTypeKind::eu64: {
-                print_indented("Type: {} (integer)", v.value.u64_val);
+            case demir::AST::ExpressionValueKind::ei8:
+            case demir::AST::ExpressionValueKind::ei16:
+            case demir::AST::ExpressionValueKind::ei32:
+            case demir::AST::ExpressionValueKind::ei64: {
+                print_indented("Value: {}", v.value.i64_val, kind_str);
             } break;
-            case demir::AST::ExpressionTypeKind::ef32:
-            case demir::AST::ExpressionTypeKind::ef64: {
-                print_indented("Type: {} (floating point)", v.value.f64_val);
+            case demir::AST::ExpressionValueKind::eu8:
+            case demir::AST::ExpressionValueKind::eu16:
+            case demir::AST::ExpressionValueKind::eu32:
+            case demir::AST::ExpressionValueKind::eu64: {
+                print_indented("Value: {}", v.value.u64_val, kind_str);
             } break;
-            case demir::AST::ExpressionTypeKind::eString: {
-                print_indented("Type: \"{}\" (string)", v.value.str_val);
+            case demir::AST::ExpressionValueKind::ef32:
+            case demir::AST::ExpressionValueKind::ef64: {
+                print_indented("Value: {}", v.value.f64_val, kind_str);
             } break;
             default: {
-                print_indented("Type: (null)");
+                print_indented("Unhandled type {}", kind_str);
             } break;
         }
+
         pop();
     }
 
@@ -189,11 +222,7 @@ struct PrinterVisitor : demir::AST::Visitor {
         print_indented("Declare var statement:");
         push();
         visit(v.identifier_expression_id);
-
-        if (v.type_expression_id != demir::AST::NodeID::Invalid) {
-            visit(v.type_expression_id);
-        }
-
+        print_indented("Type: {}", expression_value_kind_to_str(v.value_kind));
         if (v.initial_expression_id != demir::AST::NodeID::Invalid) {
             visit(v.initial_expression_id);
         }
@@ -206,12 +235,11 @@ struct PrinterVisitor : demir::AST::Visitor {
         visit(v.identifier_expression_id);
         for (const auto &param : v.parameters) {
             visit(param.identifier_expression_id);
-            visit(param.type_expression_id);
+            print_indented("Parameter type: {}", expression_value_kind_to_str(param.value_kind));
         }
 
-        if (v.return_type_expression_id != demir::AST::NodeID::Invalid) {
-            print_indented("Return type:");
-            visit(v.return_type_expression_id);
+        if (v.return_value_kind != demir::AST::ExpressionValueKind::eNone) {
+            print_indented("Return type: {}", expression_value_kind_to_str(v.return_value_kind));
         }
 
         visit(v.body_statement_id);
@@ -297,6 +325,7 @@ int main(int argc, char *argv[]) {
     auto allocator = demir::BumpAllocator{};
     auto parse_result = demir::Parser::parse(&allocator, source);
     auto ast_module = demir::AST::Module(std::move(parse_result.nodes), parse_result.root_node_id);
+    demir::IR::lower_ast_module(&allocator, &ast_module);
     auto ast_module_printer = PrinterVisitor(&ast_module);
     ast_module_printer.visit(ast_module.root_node_id);
 

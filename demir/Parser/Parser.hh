@@ -30,6 +30,8 @@ private:
     auto expect(this Parser &, TokenKind kind) -> const Token &;
     auto next(this Parser &) -> const Token &;
 
+    auto parse_intrinsic_type(this Parser &) -> AST::ExpressionValueKind;
+
     auto parse_statement(this Parser &, bool root = false) -> AST::NodeID;
     auto parse_multi_statement(this Parser &) -> AST::NodeID;
     auto parse_single_statement(this Parser &) -> AST::NodeID;

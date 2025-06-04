@@ -1,19 +1,15 @@
 #pragma once
 
-#include "demir/Core/Span.hh"
-#include "demir/IR/Instruction.hh"
+#include "demir/IR/Node.hh"
 
 namespace demir::IR {
-struct Block {
-    Span<InstructionID> instruction_ids = {};
-    InstructionID id = InstructionID::Invalid;
-};
-
 struct Module {
-    std::vector<Instruction> instructions = {};
+    std::vector<Node> nodes = {};
 
-    auto make_instruction(const Instruction &instruction) -> InstructionID;
-    auto get_instruction(this Module &, InstructionID instruction_id) -> Instruction *;
+    Module() = default;
+    Module(std::vector<Node> nodes_) : nodes(std::move(nodes_)) {}
+
+    auto get_node(this Module &, NodeID node_id) -> Node *;
 };
 
 } // namespace demir::IR

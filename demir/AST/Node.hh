@@ -131,21 +131,21 @@ struct DeclareVarStatement {
     NodeKind kind = NodeKind::eDeclareVarStatement;
 
     NodeID identifier_expression_id = NodeID::Invalid;
-    NodeID type_expression_id = NodeID::Invalid;
+    ExpressionValueKind value_kind = ExpressionValueKind::eNone;
     NodeID initial_expression_id = NodeID::Invalid;
 };
 
 struct DeclareFunctionStatement {
     struct Parameter {
         NodeID identifier_expression_id = NodeID::Invalid;
-        NodeID type_expression_id = NodeID::Invalid;
+        ExpressionValueKind value_kind = ExpressionValueKind::eNone;
     };
 
     NodeKind kind = NodeKind::eDeclareFunctionStatement;
 
     NodeID identifier_expression_id = NodeID::Invalid;
     Span<Parameter> parameters = {};
-    NodeID return_type_expression_id = NodeID::Invalid;
+    ExpressionValueKind return_value_kind = ExpressionValueKind::eNone;
     NodeID body_statement_id = NodeID::Invalid;
 };
 

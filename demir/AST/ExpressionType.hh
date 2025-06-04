@@ -3,7 +3,7 @@
 #include "demir/Core/Types.hh"
 
 namespace demir::AST {
-enum struct ExpressionTypeKind : u32 {
+enum struct ExpressionValueKind : u32 {
     // Flags start after bit 8
     eAtom = 1 << 9,
     eSigned = 1 << 10,
@@ -30,10 +30,11 @@ enum struct ExpressionTypeKind : u32 {
 };
 
 struct ExpressionValue {
-    ExpressionTypeKind kind = ExpressionTypeKind::eNone;
+    ExpressionValueKind kind = ExpressionValueKind::eNone;
     u32 element_count = 1;
     union {
         u64 u64_val = 0;
+        i64 i64_val;
         f64 f64_val;
         const c8 *str_val;
         bool bool_val;

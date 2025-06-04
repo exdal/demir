@@ -208,6 +208,37 @@ auto Parser::next(this Parser &self) -> const Token & {
     return token;
 }
 
+auto Parser::parse_intrinsic_type(this Parser &self) -> AST::ExpressionValueKind {
+    const auto &token = self.peek();
+
+    switch (token.kind) {
+        case TokenKind::eBool:
+            return AST::ExpressionValueKind::eBool;
+        case TokenKind::ei8:
+            return AST::ExpressionValueKind::ei8;
+        case TokenKind::eu8:
+            return AST::ExpressionValueKind::eu8;
+        case TokenKind::ei16:
+            return AST::ExpressionValueKind::ei16;
+        case TokenKind::eu16:
+            return AST::ExpressionValueKind::eu16;
+        case TokenKind::ei32:
+            return AST::ExpressionValueKind::ei32;
+        case TokenKind::eu32:
+            return AST::ExpressionValueKind::eu32;
+        case TokenKind::ei64:
+            return AST::ExpressionValueKind::ei64;
+        case TokenKind::eu64:
+            return AST::ExpressionValueKind::eu64;
+        case TokenKind::ef32:
+            return AST::ExpressionValueKind::ef32;
+        case TokenKind::ef64:
+            return AST::ExpressionValueKind::ef64;
+        default:
+            throw ParserUnexpectedTokenError(token.location);
+    }
+}
+
 auto Parser::parse_statement(this Parser &self, bool root) -> AST::NodeID {
     if (self.peek().is(TokenKind::eBraceLeft) && !root) {
         return self.parse_multi_statement();
@@ -292,15 +323,16 @@ auto Parser::parse_variable_decl_statement(this Parser &self) -> AST::NodeID {
 
     auto identifier_expression = self.parse_identifier_expression();
 
-    auto type_expression_id = AST::NodeID::Invalid;
+    auto value_kind = AST::ExpressionValueKind::eNone;
     if (self.peek().is(TokenKind::eColon)) {
         self.next();
 
-        type_expression_id = self.parse_primary_expression();
+        value_kind = self.parse_intrinsic_type();
+        self.next();
     }
 
     auto initial_expression_id = AST::NodeID::Invalid;
-    if (type_expression_id == AST::NodeID::Invalid || self.peek().is(TokenKind::eEqual)) {
+    if (value_kind == AST::ExpressionValueKind::eNone || self.peek().is(TokenKind::eEqual)) {
         self.expect(self.next(), TokenKind::eEqual);
 
         initial_expression_id = self.parse_expression();
@@ -310,7 +342,7 @@ auto Parser::parse_variable_decl_statement(this Parser &self) -> AST::NodeID {
 
     auto decl_var_statement = AST::DeclareVarStatement{};
     decl_var_statement.identifier_expression_id = identifier_expression;
-    decl_var_statement.type_expression_id = type_expression_id;
+    decl_var_statement.value_kind = value_kind;
     decl_var_statement.initial_expression_id = initial_expression_id;
 
     return self.make_node({ .decl_var_statement = decl_var_statement });
@@ -336,19 +368,21 @@ auto Parser::parse_function_decl_statement(this Parser &self) -> AST::NodeID {
 
         auto param_identifier_expression = self.parse_identifier_expression();
         self.expect(self.next(), TokenKind::eColon);
-        auto param_type_expression = self.parse_primary_expression();
+        auto param_type_kind = self.parse_intrinsic_type();
+        self.next();
 
-        params.push_back({ .identifier_expression_id = param_identifier_expression, .type_expression_id = param_type_expression });
+        params.push_back({ .identifier_expression_id = param_identifier_expression, .value_kind = param_type_kind });
         first_param = false;
     }
 
     self.expect(self.next(), TokenKind::eParenRight);
 
-    auto return_type_expression = AST::NodeID::Invalid;
+    auto return_type_kind = AST::ExpressionValueKind::eNone;
     if (self.peek().is(TokenKind::eArrow)) {
         self.next();
 
-        return_type_expression = self.parse_primary_expression();
+        return_type_kind = self.parse_intrinsic_type();
+        self.next();
     }
 
     auto body_statement = self.parse_statement();
@@ -356,7 +390,7 @@ auto Parser::parse_function_decl_statement(this Parser &self) -> AST::NodeID {
     auto decl_function_statement = AST::DeclareFunctionStatement{};
     decl_function_statement.identifier_expression_id = identifier_expression;
     decl_function_statement.parameters = self.allocator->copy_into(Span(params));
-    decl_function_statement.return_type_expression_id = return_type_expression;
+    decl_function_statement.return_value_kind = return_type_kind;
     decl_function_statement.body_statement_id = body_statement;
 
     return self.make_node({ .decl_function_statement = decl_function_statement });
@@ -594,26 +628,26 @@ auto Parser::parse_const_value_expression(this Parser &self) -> AST::NodeID {
     auto expr_value = AST::ExpressionValue{};
     switch (token.kind) {
         case TokenKind::eTrue: {
-            expr_value.kind = AST::ExpressionTypeKind::eBool;
+            expr_value.kind = AST::ExpressionValueKind::eBool;
             expr_value.bool_val = true;
         } break;
         case TokenKind::eFalse: {
-            expr_value.kind = AST::ExpressionTypeKind::eBool;
+            expr_value.kind = AST::ExpressionValueKind::eBool;
             expr_value.bool_val = false;
         } break;
         case TokenKind::eStringLiteral: {
             auto token_str = token.string(self.source);
             auto expr_str = self.allocator->alloc_str(token_str);
-            expr_value.kind = AST::ExpressionTypeKind::eString;
+            expr_value.kind = AST::ExpressionValueKind::eString;
             expr_value.element_count = token.string_length;
             expr_value.str_val = expr_str.data();
         } break;
         case TokenKind::eIntegerLiteral: {
-            expr_value.kind = AST::ExpressionTypeKind::ei32;
+            expr_value.kind = AST::ExpressionValueKind::ei32;
             expr_value.u64_val = token.integer_value;
         } break;
         case TokenKind::eFloatingPointLiteral: {
-            expr_value.kind = AST::ExpressionTypeKind::ef32;
+            expr_value.kind = AST::ExpressionValueKind::ef32;
             expr_value.f64_val = token.float_value;
         } break;
         default: {
