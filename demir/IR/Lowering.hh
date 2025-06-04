@@ -34,8 +34,10 @@ struct Builder {
 
     auto lower_type(this Builder &, const Type &type) -> NodeID;
     auto lower_type(this Builder &, AST::ExpressionValueKind value_kind) -> NodeID;
-    auto lower_decl_function(this Builder &, AST::DeclareFunctionStatement &statement) -> NodeID;
-    auto lower_decl_variable(this Builder &, AST::DeclareVarStatement &statement) -> NodeID;
+    auto lower_decl_function_statement(this Builder &, AST::DeclareFunctionStatement &statement) -> NodeID;
+    auto lower_decl_variable_statement(this Builder &, AST::DeclareVarStatement &statement) -> NodeID;
+    auto lower_return_statement(this Builder &, AST::ReturnStatement &statement) -> NodeID;
+    auto lower_branch_statement(this Builder &, AST::BranchStatement &statement) -> NodeID;
 };
 
 auto lower_ast_module(BumpAllocator *allocator, AST::Module *ast_module) -> Module;

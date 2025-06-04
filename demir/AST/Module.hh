@@ -1,6 +1,7 @@
 #pragma once
 
 #include "demir/AST/Node.hh"
+#include "demir/Core/Option.hh"
 
 #include <vector>
 
@@ -12,7 +13,8 @@ struct Module {
     Module() = default;
     Module(std::vector<Node> nodes_, NodeID root_node_id_) : nodes(std::move(nodes_)), root_node_id(root_node_id_) {}
 
-    auto get_node(this Module &, AST::NodeID node_id) -> AST::Node *;
+    auto get_node(this Module &, NodeID node_id) -> Node *;
+    auto get_underlying_expression_value(this Module &, NodeID node_id) -> Option<ExpressionValue>;
 };
 
 } // namespace demir::AST

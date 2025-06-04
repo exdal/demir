@@ -28,14 +28,15 @@ struct BuilderVisitor : AST::Visitor {
     }
 
     auto visit(AST::DeclareVarStatement &statement) -> void override {
-        builder->lower_decl_variable(statement);
+        builder->lower_decl_variable_statement(statement);
     }
 
     auto visit(AST::DeclareFunctionStatement &statement) -> void override {
         // Lower function header
-        auto node_id = builder->lower_decl_function(statement);
+        auto node_id = builder->lower_decl_function_statement(statement);
         auto *lowered_node = builder->get_node(node_id);
         auto &lowered_func = lowered_node->function;
+
         builder->set_active_basic_block(lowered_func.starter_block_id);
 
         // Lower function body
@@ -49,13 +50,31 @@ struct BuilderVisitor : AST::Visitor {
             };
             builder->make_instr({ .return_instr = return_instr });
         }
+
         builder->set_active_basic_block(NodeID::Invalid);
     }
 
-    auto visit(AST::ReturnStatement &) -> void override {}
+    auto visit(AST::ReturnStatement &statement) -> void override {
+        builder->lower_return_statement(statement);
+    }
+
     auto visit(AST::ExpressionStatement &) -> void override {}
     auto visit(AST::WhileStatement &) -> void override {}
-    auto visit(AST::BranchStatement &) -> void override {}
+
+    auto visit(AST::BranchStatement &statement) -> void override {
+        auto conditional_branch_instr_node_id = builder->lower_branch_statement(statement);
+        auto *node = builder->get_node(conditional_branch_instr_node_id);
+        auto &conditional_branch_instr = node->instruction.conditional_branch_instr;
+
+        for (const auto &statement_cond : statement.conditions) {
+            visit(statement_cond.true_case_statement_id);
+        }
+
+        if (statement.false_case_statement_id != AST::NodeID::Invalid) {
+            visit(statement.false_case_statement_id);
+        }
+    }
+
     auto visit(AST::MultiwayBranchStatement &) -> void override {}
     auto visit(AST::BreakStatement &) -> void override {}
     auto visit(AST::ContinueStatement &) -> void override {}
@@ -189,7 +208,7 @@ auto Builder::lower_type(this Builder &self, AST::ExpressionValueKind value_kind
     return NodeID::Invalid;
 }
 
-auto Builder::lower_decl_function(this Builder &self, AST::DeclareFunctionStatement &statement) -> NodeID {
+auto Builder::lower_decl_function_statement(this Builder &self, AST::DeclareFunctionStatement &statement) -> NodeID {
     auto param_type_node_ids = std::vector<NodeID>();
     for (const auto &param : statement.parameters) {
         param_type_node_ids.push_back(self.lower_type(param.value_kind));
@@ -204,7 +223,7 @@ auto Builder::lower_decl_function(this Builder &self, AST::DeclareFunctionStatem
     return self.make_node({ .function = function });
 }
 
-auto Builder::lower_decl_variable(this Builder &self, AST::DeclareVarStatement &statement) -> NodeID {
+auto Builder::lower_decl_variable_statement(this Builder &self, AST::DeclareVarStatement &statement) -> NodeID {
     auto type_node_id = self.lower_type(statement.value_kind);
 
     auto variable = Variable{
@@ -217,6 +236,36 @@ auto Builder::lower_decl_variable(this Builder &self, AST::DeclareVarStatement &
     }
 
     return variable_id;
+}
+
+auto Builder::lower_return_statement(this Builder &self, AST::ReturnStatement &statement) -> NodeID {
+    auto return_expr_type_value = self.module->get_underlying_expression_value(statement.return_expression_id);
+    auto returning_node_id = self.lower_type(return_expr_type_value.value_or(AST::ExpressionValue{}).kind);
+    auto return_instr = ReturnInstruction{
+        .returning_node_id = returning_node_id,
+    };
+
+    return self.make_instr({ .return_instr = return_instr });
+}
+
+auto Builder::lower_branch_statement(this Builder &self, AST::BranchStatement &statement) -> NodeID {
+    auto condition_block_ids = std::vector<ConditionalBranchInstruction::Condition>();
+    for (const auto &cond : statement.conditions) {
+        auto block_node_id = self.make_node({ .basic_block = {} });
+        // TODO: conditions
+        condition_block_ids.push_back({ .true_block_node_id = block_node_id });
+    }
+
+    auto false_case_block_node_id = NodeID::Invalid;
+    if (statement.false_case_statement_id != AST::NodeID::Invalid) {
+        false_case_block_node_id = self.make_node({ .basic_block = {} });
+    }
+
+    auto conditional_branch_instr = ConditionalBranchInstruction{};
+    conditional_branch_instr.conditions = self.allocator->copy_into(Span(condition_block_ids));
+    conditional_branch_instr.false_block_node_id = false_case_block_node_id;
+
+    return self.make_instr({ .conditional_branch_instr = conditional_branch_instr });
 }
 
 auto lower_ast_module(BumpAllocator *allocator, AST::Module *ast_module) -> Module {

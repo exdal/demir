@@ -56,8 +56,12 @@ struct BranchInstruction : InstructionHeader<InstructionKind::eBranch> {
 
 // Terminating instruction, must be at the end of the block.
 struct ConditionalBranchInstruction : InstructionHeader<InstructionKind::eConditionalBranch> {
-    NodeID condition_node_id = NodeID::Invalid;
-    NodeID true_block_node_id = NodeID::Invalid;
+    struct Condition {
+        NodeID condition_node_id = NodeID::Invalid;
+        NodeID true_block_node_id = NodeID::Invalid;
+    };
+
+    Span<Condition> conditions = {};
     NodeID false_block_node_id = NodeID::Invalid;
 };
 
