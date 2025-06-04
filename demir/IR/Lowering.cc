@@ -42,10 +42,13 @@ struct BuilderVisitor : AST::Visitor {
         builder->make_instr({ .label_instr = {} });
         visit(statement.body_statement_id);
 
-        auto return_instr = ReturnInstruction{
-            .returning_node_id = lowered_func.return_type_node_id,
-        };
-        builder->make_instr({ .return_instr = return_instr });
+        // Check for explicit return, insert implicit one if not available
+        if (lowered_func.return_node_instr_id == NodeID::Invalid) {
+            auto return_instr = ReturnInstruction{
+                .returning_node_id = builder->lower_type(Type{ .type_kind = TypeKind::eVoid }),
+            };
+            builder->make_instr({ .return_instr = return_instr });
+        }
         builder->set_active_basic_block(NodeID::Invalid);
     }
 

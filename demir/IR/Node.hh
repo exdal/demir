@@ -150,6 +150,8 @@ struct Function {
     Span<NodeID> parameter_type_node_ids = {};
     NodeID return_type_node_id = {};
     NodeID starter_block_id = NodeID::Invalid;
+    // for implicit returns
+    NodeID return_node_instr_id = NodeID::Invalid;
 };
 
 union Node {
