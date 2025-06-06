@@ -3,6 +3,7 @@
 #include "demir/AST/Visitor.hh"
 #include "demir/Core/Compiler.hh"
 
+#include <ranges>
 #include <utility>
 
 namespace demir::IR {
@@ -12,10 +13,14 @@ struct BuilderVisitor : AST::Visitor {
     Builder *builder = nullptr;
     BumpAllocator *allocator = nullptr;
 
-    BuilderVisitor(Builder *builder_) : builder(builder_), allocator(builder_->allocator), AST::Visitor(builder_->module) {}
+    BuilderVisitor(Builder *builder_) : AST::Visitor(builder_->module), builder(builder_), allocator(builder_->allocator) {}
 
     auto visit(AST::IdentifierExpression &) -> void override {}
-    auto visit(AST::ConstantValueExpression &) -> void override {}
+
+    auto visit(AST::ConstantValueExpression &expression) -> void override {
+        builder->lower_constant_expression(expression);
+    }
+
     auto visit(AST::AssignExpression &) -> void override {}
     auto visit(AST::BinaryExpression &) -> void override {}
     auto visit(AST::CallFunctionExpression &) -> void override {}
@@ -28,33 +33,21 @@ struct BuilderVisitor : AST::Visitor {
     }
 
     auto visit(AST::DeclareVarStatement &statement) -> void override {
+        visit(statement.initial_expression_id);
         builder->lower_decl_variable_statement(statement);
     }
 
     auto visit(AST::DeclareFunctionStatement &statement) -> void override {
         // Lower function header
         auto node_id = builder->lower_decl_function_statement(statement);
-        auto *lowered_node = builder->get_node(node_id);
-        auto &lowered_func = lowered_node->function;
 
-        builder->set_active_basic_block(lowered_func.starter_block_id);
-
-        // Lower function body
-        builder->make_instr({ .label_instr = {} });
+        builder->begin_function(node_id);
         visit(statement.body_statement_id);
-
-        // Check for explicit return, insert implicit one if not available
-        if (lowered_func.return_node_instr_id == NodeID::Invalid) {
-            auto return_instr = ReturnInstruction{
-                .returning_node_id = builder->lower_type(Type{ .type_kind = TypeKind::eVoid }),
-            };
-            builder->make_instr({ .return_instr = return_instr });
-        }
-
-        builder->set_active_basic_block(NodeID::Invalid);
+        builder->end_function(node_id);
     }
 
     auto visit(AST::ReturnStatement &statement) -> void override {
+        builder->ensure_block();
         builder->lower_return_statement(statement);
     }
 
@@ -66,12 +59,16 @@ struct BuilderVisitor : AST::Visitor {
         auto *node = builder->get_node(conditional_branch_instr_node_id);
         auto &conditional_branch_instr = node->instruction.conditional_branch_instr;
 
-        for (const auto &statement_cond : statement.conditions) {
+        for (const auto &[statement_cond, instr_cond] : std::views::zip(statement.conditions, conditional_branch_instr.conditions)) {
+            builder->set_active_basic_block(instr_cond.true_block_node_id);
             visit(statement_cond.true_case_statement_id);
+            builder->set_active_basic_block(NodeID::Invalid);
         }
 
         if (statement.false_case_statement_id != AST::NodeID::Invalid) {
+            builder->set_active_basic_block(conditional_branch_instr.false_block_node_id);
             visit(statement.false_case_statement_id);
+            builder->set_active_basic_block(NodeID::Invalid);
         }
     }
 
@@ -83,13 +80,18 @@ struct BuilderVisitor : AST::Visitor {
 auto Builder::make_node(const Node &node) -> NodeID {
     auto node_index = this->nodes.size();
     this->nodes.push_back(node);
+    auto node_id = static_cast<NodeID>(node_index);
 
-    return static_cast<NodeID>(node_index);
+    if (node.kind == NodeKind::eBasicBlock) {
+        this->current_function_block_node_ids.push_back(node_id);
+    }
+
+    return node_id;
 }
 
 auto Builder::make_instr(const Instruction &instr) -> NodeID {
     auto node_id = make_node(Node{ .instruction = instr });
-    if (this->active_basic_block_id != NodeID::Invalid) {
+    if (this->active_basic_block_node_id != NodeID::Invalid) {
         this->current_block_instr_node_ids.push_back(node_id);
     }
 
@@ -106,8 +108,8 @@ auto Builder::get_node(this Builder &self, NodeID node_id) -> Node * {
 }
 
 auto Builder::set_active_basic_block(this Builder &self, NodeID basic_block_id) -> void {
-    if (self.active_basic_block_id != NodeID::Invalid) {
-        auto *old_node = self.get_node(self.active_basic_block_id);
+    if (self.active_basic_block_node_id != NodeID::Invalid) {
+        auto *old_node = self.get_node(self.active_basic_block_node_id);
         auto &old_block = old_node->basic_block;
         old_block.instruction_ids = self.allocator->copy_into(Span(self.current_block_instr_node_ids));
         old_block.variable_ids = self.allocator->copy_into(Span(self.current_block_variable_node_ids));
@@ -116,22 +118,37 @@ auto Builder::set_active_basic_block(this Builder &self, NodeID basic_block_id) 
         self.current_block_variable_node_ids.clear();
     }
 
-    self.active_basic_block_id = basic_block_id;
+    self.active_basic_block_node_id = basic_block_id;
 }
 
 auto Builder::active_block(this Builder &self) -> BasicBlock * {
-    if (self.active_basic_block_id == NodeID::Invalid) {
+    if (self.active_basic_block_node_id == NodeID::Invalid) {
         return nullptr;
     }
 
-    auto &node = self.nodes[std::to_underlying(self.active_basic_block_id)];
+    auto &node = self.nodes[std::to_underlying(self.active_basic_block_node_id)];
     return &node.basic_block;
+}
+
+auto Builder::ensure_block(this Builder &self) -> NodeID {
+    if (self.active_basic_block_node_id == NodeID::Invalid) {
+        auto new_block_node_id = self.make_node({ .basic_block = {} });
+        self.set_active_basic_block(new_block_node_id);
+
+        return new_block_node_id;
+    }
+
+    return self.active_basic_block_node_id;
 }
 
 auto Builder::lower_type(this Builder &self, const Type &type) -> NodeID {
     for (auto type_node_id : self.unique_type_node_ids) {
         auto *cur_node = self.get_node(type_node_id);
         auto &cur_type = cur_node->type;
+        if (cur_type.type_kind != type.type_kind) {
+            continue;
+        }
+
         auto is_same = false;
         switch (cur_type.type_kind) {
             case TypeKind::eVoid:
@@ -208,6 +225,30 @@ auto Builder::lower_type(this Builder &self, AST::ExpressionValueKind value_kind
     return NodeID::Invalid;
 }
 
+auto Builder::lower_constant(this Builder &self, const Constant &constant) -> NodeID {
+    for (auto cur_const_node_id : self.unique_constant_node_ids) {
+        auto *cur_node = self.get_node(cur_const_node_id);
+        auto &cur_const = cur_node->constant;
+        if (cur_const.type_node_id != constant.type_node_id) {
+            continue;
+        }
+
+        if (cur_const.u64_value == constant.u64_value) {
+            return cur_const_node_id;
+        }
+    }
+
+    auto new_const_node_id = self.make_node({ .constant = constant });
+    self.unique_constant_node_ids.push_back(new_const_node_id);
+
+    return new_const_node_id;
+}
+
+auto Builder::lower_constant_expression(this Builder &self, AST::ConstantValueExpression &expression) -> NodeID {
+    auto lowered_type_node_id = self.lower_type(expression.value.kind);
+    return self.lower_constant(Constant{ .type_node_id = lowered_type_node_id, .u64_value = expression.value.u64_val });
+}
+
 auto Builder::lower_decl_function_statement(this Builder &self, AST::DeclareFunctionStatement &statement) -> NodeID {
     auto param_type_node_ids = std::vector<NodeID>();
     for (const auto &param : statement.parameters) {
@@ -218,9 +259,23 @@ auto Builder::lower_decl_function_statement(this Builder &self, AST::DeclareFunc
     auto function = Function{
         .parameter_type_node_ids = self.allocator->copy_into(Span(param_type_node_ids)),
         .return_type_node_id = return_type_node_id,
-        .starter_block_id = self.make_node({ .basic_block = {} }),
     };
     return self.make_node({ .function = function });
+}
+
+auto Builder::begin_function(this Builder &self, [[maybe_unused]] NodeID func_node_id) -> void {
+    auto starter_block_id = self.make_node({ .basic_block = {} });
+    self.set_active_basic_block(starter_block_id);
+}
+
+auto Builder::end_function(this Builder &self, NodeID func_node_id) -> void {
+    self.set_active_basic_block(NodeID::Invalid);
+
+    // NO NODE INSERTIONS PAST THIS FUNCTION
+    auto *lowered_node = self.get_node(func_node_id);
+    auto &lowered_func = lowered_node->function;
+    lowered_func.basic_block_node_ids = self.allocator->copy_into(Span(self.current_function_block_node_ids));
+    self.current_function_block_node_ids.clear();
 }
 
 auto Builder::lower_decl_variable_statement(this Builder &self, AST::DeclareVarStatement &statement) -> NodeID {
@@ -231,7 +286,7 @@ auto Builder::lower_decl_variable_statement(this Builder &self, AST::DeclareVarS
     };
     auto variable_id = self.make_node({ .variable = variable });
 
-    if (self.active_basic_block_id != NodeID::Invalid) {
+    if (self.active_basic_block_node_id != NodeID::Invalid) {
         self.current_block_variable_node_ids.push_back(variable_id);
     }
 
@@ -250,7 +305,7 @@ auto Builder::lower_return_statement(this Builder &self, AST::ReturnStatement &s
 
 auto Builder::lower_branch_statement(this Builder &self, AST::BranchStatement &statement) -> NodeID {
     auto condition_block_ids = std::vector<ConditionalBranchInstruction::Condition>();
-    for (const auto &cond : statement.conditions) {
+    for ([[maybe_unused]] const auto &cond : statement.conditions) {
         auto block_node_id = self.make_node({ .basic_block = {} });
         // TODO: conditions
         condition_block_ids.push_back({ .true_block_node_id = block_node_id });
@@ -273,7 +328,7 @@ auto lower_ast_module(BumpAllocator *allocator, AST::Module *ast_module) -> Modu
     auto ir_visitor = BuilderVisitor(&ir_builder);
     ir_visitor.visit(ast_module->root_node_id);
 
-    return Module(std::move(ir_builder.nodes));
+    return Module(std::move(ir_builder.nodes), std::move(ir_builder.unique_type_node_ids), std::move(ir_builder.unique_constant_node_ids));
 }
 
 } // namespace demir::IR

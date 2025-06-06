@@ -19,7 +19,6 @@ enum class NodeKind : u32 {
 enum class InstructionKind : u32 {
     eNoOp = 0,
     // Control Flow instructions
-    eLabel, // defining
     eReturn, // terminating
     eKill, // terminating
     eBranch, // terminating
@@ -37,9 +36,6 @@ struct InstructionHeader {
     NodeKind node_kind = NodeKind::eInstruction;
     InstructionKind instr_kind = KIND;
 };
-
-// Must be at the beginning of a block, `instruction_id` is the ID of the block.
-struct LabelInstruction : InstructionHeader<InstructionKind::eLabel> {};
 
 // Terminating instruction, must be at the end of the block.
 struct ReturnInstruction : InstructionHeader<InstructionKind::eReturn> {
@@ -96,7 +92,6 @@ struct FunctionCallInstruction : InstructionHeader<InstructionKind::eFunctionCal
 union Instruction {
     InstructionHeader<InstructionKind::eNoOp> header = {};
 
-    LabelInstruction label_instr;
     ReturnInstruction return_instr;
     KillInstruction kill_instr;
     BranchInstruction branch_instr;
@@ -153,9 +148,7 @@ struct Function {
 
     Span<NodeID> parameter_type_node_ids = {};
     NodeID return_type_node_id = {};
-    NodeID starter_block_id = NodeID::Invalid;
-    // for implicit returns
-    NodeID return_node_instr_id = NodeID::Invalid;
+    Span<NodeID> basic_block_node_ids = {};
 };
 
 union Node {

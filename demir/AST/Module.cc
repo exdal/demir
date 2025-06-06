@@ -15,6 +15,10 @@ auto Module::get_node(this Module &self, NodeID node_id) -> Node * {
 }
 
 auto Module::get_underlying_expression_value(this Module &self, NodeID node_id) -> Option<ExpressionValue> {
+    if (node_id == NodeID::Invalid) {
+        return {};
+    }
+
     auto *node = self.get_node(node_id);
     switch (node->kind) {
         case NodeKind::eIdentifierExpression: {

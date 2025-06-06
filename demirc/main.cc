@@ -105,6 +105,42 @@ auto expression_value_kind_to_str(demir::AST::ExpressionValueKind value_kind) ->
     }
 }
 
+auto instruction_kind_to_str(demir::IR::InstructionKind kind) -> std::string_view {
+    switch (kind) {
+        case demir::IR::InstructionKind::eNoOp:
+            return "OpNoOp";
+        case demir::IR::InstructionKind::eReturn:
+            return "OpReturn";
+        case demir::IR::InstructionKind::eKill:
+            return "OpKill";
+        case demir::IR::InstructionKind::eBranch:
+            return "OpBranch";
+        case demir::IR::InstructionKind::eConditionalBranch:
+            return "OpConditionalBranch";
+        case demir::IR::InstructionKind::eMultiwayBranch:
+            return "OpMultiwayBranch";
+        case demir::IR::InstructionKind::eLoad:
+            return "OpLoad";
+        case demir::IR::InstructionKind::eStore:
+            return "OpStore";
+        case demir::IR::InstructionKind::eFunctionCall:
+            return "OpCallFunction";
+    }
+}
+
+auto instruction_type_kind_to_str(demir::IR::TypeKind kind) -> std::string_view {
+    switch (kind) {
+        case demir::IR::TypeKind::eVoid:
+            return "void";
+        case demir::IR::TypeKind::eBool:
+            return "bool";
+        case demir::IR::TypeKind::eInt:
+            return "int";
+        case demir::IR::TypeKind::eFloat:
+            return "float";
+    }
+}
+
 struct PrinterVisitor : demir::AST::Visitor {
     using demir::AST::Visitor::visit;
 
@@ -324,10 +360,93 @@ int main(int argc, char *argv[]) {
 
     auto allocator = demir::BumpAllocator{};
     auto parse_result = demir::Parser::parse(&allocator, source);
+
+    fmt::println("==== AST DUMP ====");
     auto ast_module = demir::AST::Module(std::move(parse_result.nodes), parse_result.root_node_id);
-    demir::IR::lower_ast_module(&allocator, &ast_module);
     auto ast_module_printer = PrinterVisitor(&ast_module);
     ast_module_printer.visit(ast_module.root_node_id);
+
+    fmt::println("==== IR DUMP ====");
+    fmt::println("header:");
+    using namespace demir;
+    auto ir_module = IR::lower_ast_module(&allocator, &ast_module);
+    auto functions = std::vector<IR::Function>();
+    u32 node_id = 0;
+    for (const auto &node : ir_module.nodes) {
+        if (node.kind == IR::NodeKind::eFunction) {
+            functions.push_back(node.function);
+        }
+
+        if (node.kind == IR::NodeKind::eType) {
+            auto &type = node.type;
+            fmt::println(
+                "  %{} = OpType [kind: {}] [width: {}] [signed: {}]",
+                node_id,
+                instruction_type_kind_to_str(type.type_kind),
+                type.width,
+                type.is_signed
+            );
+        }
+
+        if (node.kind == IR::NodeKind::eConstant) {
+            auto &constant = node.constant;
+            fmt::println("  %{} = OpConstant [type: %{}] [value: {}]", node_id, std::to_underlying(constant.type_node_id), constant.u64_value);
+        }
+
+        node_id++;
+    }
+
+    u32 func_id = 0;
+    for (const auto &func : functions) {
+        fmt::println("func_{}:", func_id);
+        func_id++;
+
+        for (auto block_id : func.basic_block_node_ids) {
+            fmt::println(" block_%{}:", std::to_underlying(block_id));
+
+            auto *block_node = ir_module.get_node(block_id);
+            auto &block = block_node->basic_block;
+            for (auto var_id : block.variable_ids) {
+                auto *var_node = ir_module.get_node(var_id);
+                auto &variable = var_node->variable;
+                fmt::println("  %{} = OpVariable [type: %{}]", std::to_underlying(var_id), std::to_underlying(variable.type_node_id));
+            }
+
+            for (auto instr_id : block.instruction_ids) {
+                auto *instr_node = ir_module.get_node(instr_id);
+                auto &instr = instr_node->instruction;
+                fmt::print("  %{} = {} ", std::to_underlying(instr_id), instruction_kind_to_str(instr.header.instr_kind));
+
+                switch (instr.header.instr_kind) {
+                    case demir::IR::InstructionKind::eNoOp:
+                    case demir::IR::InstructionKind::eKill: {
+                        fmt::println("");
+                    } break;
+                    case demir::IR::InstructionKind::eReturn: {
+                        auto &return_instr = instr.return_instr;
+                        fmt::println("[return: %{}]", std::to_underlying(return_instr.returning_node_id));
+                    } break;
+                    case demir::IR::InstructionKind::eBranch: {
+                        auto &branch_instr = instr.branch_instr;
+                        fmt::println("[branch: %{}]", std::to_underlying(branch_instr.node_kind));
+                    } break;
+                    case demir::IR::InstructionKind::eConditionalBranch: {
+                        auto &cond_branch_instr = instr.conditional_branch_instr;
+                        for (const auto &cond : cond_branch_instr.conditions) {
+                            fmt::print("[true_branch: %{}] ", std::to_underlying(cond.true_block_node_id));
+                        }
+
+                        fmt::println("[false_branch: %{}] ", std::to_underlying(cond_branch_instr.false_block_node_id));
+                    } break;
+                    case demir::IR::InstructionKind::eMultiwayBranch:
+                    case demir::IR::InstructionKind::eLoad:
+                    case demir::IR::InstructionKind::eStore:
+                    case demir::IR::InstructionKind::eFunctionCall:
+                        break;
+                }
+            }
+        }
+    }
 
     return 0;
 }
