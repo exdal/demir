@@ -277,23 +277,48 @@ auto Builder::lower_constant_expression(this Builder &self, AST::ConstantValueEx
 auto Builder::lower_assign_expression(this Builder &self, AST::AssignExpression &expression) -> NodeID {
     auto lhs_node_id = self.lower_expression(expression.lhs_expression_id);
     auto rhs_node_id = self.lower_expression(expression.rhs_expression_id);
+
+    auto alu_instr_id = NodeID::Invalid;
     switch (expression.assign_type) {
         case AST::AssignmentType::eAssign: {
-            auto store_instr = StoreInstruction{
-                .dst_node_id = lhs_node_id,
-                .src_node_id = rhs_node_id,
+            alu_instr_id = rhs_node_id;
+        } break;
+        case AST::AssignmentType::eCompoundAdd: {
+            auto add_instr = AddInstruction{
+                .lhs_node_id = lhs_node_id,
+                .rhs_node_id = rhs_node_id,
             };
-
-            return self.make_instr({ .store_instr = store_instr });
-        }
-        case AST::AssignmentType::eCompoundAdd:
-        case AST::AssignmentType::eCompoundSub:
-        case AST::AssignmentType::eCompoundMul:
-        case AST::AssignmentType::eCompoundDiv:
-            break;
+            alu_instr_id = self.make_instr({ .add_instr = add_instr });
+        } break;
+        case AST::AssignmentType::eCompoundSub: {
+            auto sub_instr = SubInstruction{
+                .lhs_node_id = lhs_node_id,
+                .rhs_node_id = rhs_node_id,
+            };
+            alu_instr_id = self.make_instr({ .sub_instr = sub_instr });
+        } break;
+        case AST::AssignmentType::eCompoundMul: {
+            auto mul_instr = MulInstruction{
+                .lhs_node_id = lhs_node_id,
+                .rhs_node_id = rhs_node_id,
+            };
+            alu_instr_id = self.make_instr({ .mul_instr = mul_instr });
+        } break;
+        case AST::AssignmentType::eCompoundDiv: {
+            auto div_instr = DivInstruction{
+                .lhs_node_id = lhs_node_id,
+                .rhs_node_id = rhs_node_id,
+            };
+            alu_instr_id = self.make_instr({ .div_instr = div_instr });
+        } break;
     }
 
-    return NodeID::Invalid;
+    auto store_instr = StoreInstruction{
+        .dst_node_id = lhs_node_id,
+        .src_node_id = alu_instr_id,
+    };
+
+    return self.make_instr({ .store_instr = store_instr });
 }
 
 auto Builder::lower_binary_op_expression(this Builder &self, AST::BinaryExpression &expression) -> NodeID {
@@ -323,6 +348,22 @@ auto Builder::lower_expression(this Builder &self, AST::NodeID expression_node_i
             return NodeID::Invalid;
         }
     }
+}
+
+auto Builder::get_expression_node_id(this Builder &self, AST::NodeID expression_node_id) -> NodeID {
+    auto *expression_node = self.module->get_node(expression_node_id);
+    switch (expression_node->kind) {
+        case AST::NodeKind::eIdentifierExpression: {
+            auto &identifier_expression = expression_node->identifier_expression;
+            auto node_id = self.symbol_map.lookup(identifier_expression.identifier_str);
+            return node_id.value_or(NodeID::Invalid);
+        }
+        default:;
+    }
+
+    // Unhandled type
+    DEMIR_DEBUGBREAK();
+    return NodeID::Invalid;
 }
 
 auto Builder::lower_decl_function_statement(this Builder &self, AST::DeclareFunctionStatement &statement) -> NodeID {
@@ -366,9 +407,17 @@ auto Builder::lower_decl_variable_statement(this Builder &self, AST::DeclareVarS
         .type_node_id = type_node_id,
     };
     auto variable_id = self.make_node({ .variable = variable });
+    if (statement.initial_expression_id != AST::NodeID::Invalid) {
+        auto initializer_node_id = self.lower_expression(statement.initial_expression_id);
+        auto store_instr = StoreInstruction{
+            .dst_node_id = variable_id,
+            .src_node_id = initializer_node_id,
+        };
+
+        self.make_instr({.store_instr = store_instr});
+    }
 
     self.symbol_map.add_symbol(statement.identifier_str, variable_id);
-
     if (self.active_basic_block_node_id != NodeID::Invalid) {
         self.current_block_variable_node_ids.push_back(variable_id);
     }

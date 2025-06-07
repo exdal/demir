@@ -126,6 +126,14 @@ auto instruction_kind_to_str(demir::IR::InstructionKind kind) -> std::string_vie
             return "OpStore";
         case demir::IR::InstructionKind::eFunctionCall:
             return "OpCallFunction";
+        case demir::IR::InstructionKind::eAdd:
+            return "OpAdd";
+        case demir::IR::InstructionKind::eSub:
+            return "OpSub";
+        case demir::IR::InstructionKind::eMul:
+            return "OpMul";
+        case demir::IR::InstructionKind::eDiv:
+            return "OpDiv";
     }
 }
 
@@ -378,7 +386,7 @@ int main(int, char *[]) {
         if (node.kind == IR::NodeKind::eType) {
             auto &type = node.type;
             fmt::println(
-                "  %{} = OpType [kind: {}] [width: {}] [signed: {}]",
+                "  %{:<2} = OpType [kind: {}] [width: {}] [signed: {}]",
                 node_id,
                 instruction_type_kind_to_str(type.type_kind),
                 type.width,
@@ -388,7 +396,7 @@ int main(int, char *[]) {
 
         if (node.kind == IR::NodeKind::eConstant) {
             auto &constant = node.constant;
-            fmt::println("  %{} = OpConstant [type: %{}] [value: {}]", node_id, std::to_underlying(constant.type_node_id), constant.u64_value);
+            fmt::println("  %{:<2} = OpConstant [type: %{}] [value: {}]", node_id, std::to_underlying(constant.type_node_id), constant.u64_value);
         }
 
         node_id++;
@@ -407,13 +415,13 @@ int main(int, char *[]) {
             for (auto var_id : block.variable_ids) {
                 auto *var_node = ir_module.get_node(var_id);
                 auto &variable = var_node->variable;
-                fmt::println("  %{} = OpVariable [type: %{}]", std::to_underlying(var_id), std::to_underlying(variable.type_node_id));
+                fmt::println("  %{:<2} = OpVariable [type: %{}]", std::to_underlying(var_id), std::to_underlying(variable.type_node_id));
             }
 
             for (auto instr_id : block.instruction_ids) {
                 auto *instr_node = ir_module.get_node(instr_id);
                 auto &instr = instr_node->instruction;
-                fmt::print("  %{} = {} ", std::to_underlying(instr_id), instruction_kind_to_str(instr.header.instr_kind));
+                fmt::print("  %{:<2} = {} ", std::to_underlying(instr_id), instruction_kind_to_str(instr.header.instr_kind));
 
                 switch (instr.header.instr_kind) {
                     case demir::IR::InstructionKind::eNoOp:
@@ -450,6 +458,18 @@ int main(int, char *[]) {
                             "[dst: %{}] [src: %{}]",
                             std::to_underlying(store_instr.dst_node_id),
                             std::to_underlying(store_instr.src_node_id)
+                        );
+                    } break;
+
+                    case demir::IR::InstructionKind::eAdd:
+                    case demir::IR::InstructionKind::eSub:
+                    case demir::IR::InstructionKind::eDiv:
+                    case demir::IR::InstructionKind::eMul: {
+                        auto &alu_instr = instr.add_instr;
+                        fmt::println(//
+                            "[lhs: %{}] [rhs: %{}]",
+                            std::to_underlying(alu_instr.lhs_node_id),
+                            std::to_underlying(alu_instr.rhs_node_id)
                         );
                     } break;
                     case demir::IR::InstructionKind::eMultiwayBranch:

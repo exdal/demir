@@ -27,6 +27,10 @@ enum class InstructionKind : u32 {
     // Memory instructions
     eLoad,
     eStore,
+    eAdd,
+    eSub,
+    eMul,
+    eDiv,
     // Function instructions
     eFunctionCall,
 };
@@ -83,6 +87,26 @@ struct StoreInstruction : InstructionHeader<InstructionKind::eStore> {
     NodeID src_node_id = NodeID::Invalid;
 };
 
+struct AddInstruction : InstructionHeader<InstructionKind::eAdd> {
+    NodeID lhs_node_id = NodeID::Invalid;
+    NodeID rhs_node_id = NodeID::Invalid;
+};
+
+struct SubInstruction : InstructionHeader<InstructionKind::eSub> {
+    NodeID lhs_node_id = NodeID::Invalid;
+    NodeID rhs_node_id = NodeID::Invalid;
+};
+
+struct DivInstruction : InstructionHeader<InstructionKind::eDiv> {
+    NodeID lhs_node_id = NodeID::Invalid;
+    NodeID rhs_node_id = NodeID::Invalid;
+};
+
+struct MulInstruction : InstructionHeader<InstructionKind::eMul> {
+    NodeID lhs_node_id = NodeID::Invalid;
+    NodeID rhs_node_id = NodeID::Invalid;
+};
+
 struct FunctionCallInstruction : InstructionHeader<InstructionKind::eFunctionCall> {
     NodeID return_type_node_id = NodeID::Invalid;
     NodeID function_node_id = NodeID::Invalid;
@@ -100,6 +124,10 @@ union Instruction {
 
     LoadInstruction load_instr;
     StoreInstruction store_instr;
+    AddInstruction add_instr;
+    SubInstruction sub_instr;
+    MulInstruction mul_instr;
+    DivInstruction div_instr;
 
     FunctionCallInstruction function_call_instr;
 };

@@ -45,6 +45,7 @@ struct Builder {
     auto lower_binary_op_expression(this Builder &, AST::BinaryExpression &expression) -> NodeID;
     // general expression lowering
     auto lower_expression(this Builder &, AST::NodeID expression_node_id) -> NodeID;
+    auto get_expression_node_id(this Builder &, AST::NodeID expression_node_id) -> NodeID;
 
     auto lower_decl_function_statement(this Builder &, AST::DeclareFunctionStatement &statement) -> NodeID;
     auto begin_function(this Builder &, NodeID func_node_id) -> void;
