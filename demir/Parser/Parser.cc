@@ -42,7 +42,9 @@ auto token_kind_to_precedence(TokenKind kind) -> AST::Precedence {
             prec = AST::Precedence::eCompareEqual;
         } break;
         case TokenKind::eAngleLeft:
-        case TokenKind::eAngleRight: {
+        case TokenKind::eAngleRight:
+        case TokenKind::eGreaterEqual:
+        case TokenKind::eLessEqual: {
             prec = AST::Precedence::eCompareRelational;
         } break;
         case TokenKind::eShiftLeft:
@@ -604,7 +606,7 @@ auto Parser::parse_primary_expression(this Parser &self) -> AST::NodeID {
             self.expect(self.next(), TokenKind::eParenLeft);
             expression_id = self.parse_expression();
             self.expect(self.next(), TokenKind::eParenRight);
-        }break;
+        } break;
         default: {
             throw ParserUnexpectedTokenError(token.location);
         }
