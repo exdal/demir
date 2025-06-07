@@ -53,12 +53,17 @@ public:
     }
 
     auto lookup(this SymbolMap &self, const KeyT &key) -> Option<ValueT> {
-        const auto &cur_stack = self.scopes[self.current_scope];
-        for (const ScopeValueMap &value_map : std::views::reverse(cur_stack)) {
-            auto value_it = value_map.find(key);
-            if (value_it != value_map.end()) {
-                return value_it->second;
+        auto looking_scope = self.current_scope;
+        while (looking_scope != 0) {
+            const auto &cur_stack = self.scopes[looking_scope];
+            for (const auto &value_map : std::views::reverse(cur_stack)) {
+                auto value_it = value_map.find(key);
+                if (value_it != value_map.end()) {
+                    return value_it->second;
+                }
             }
+
+            looking_scope -= 1;
         }
 
         return nullopt;
