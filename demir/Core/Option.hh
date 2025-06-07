@@ -13,6 +13,7 @@ template<typename T>
 concept is_enum_with_invalid_val = requires(T v) {
     std::is_enum_v<T>;
     T::Invalid;
+    T::eInvalid;
 };
 
 template<typename, typename = void>

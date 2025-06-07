@@ -253,6 +253,94 @@ auto Builder::lower_constant(this Builder &self, const Constant &constant) -> No
     return new_const_node_id;
 }
 
+auto Builder::lower_binary_op(this Builder &self, AST::BinaryOp op, NodeID lhs_node_id, NodeID rhs_node_id) -> NodeID {
+    switch (op) {
+        case AST::BinaryOp::eAdd: {
+            auto instr = AddInstruction{
+                .lhs_node_id = lhs_node_id,
+                .rhs_node_id = rhs_node_id,
+            };
+            return self.make_instr({ .add_instr = instr });
+        }
+        case AST::BinaryOp::eSub: {
+            auto instr = SubInstruction{
+                .lhs_node_id = lhs_node_id,
+                .rhs_node_id = rhs_node_id,
+            };
+            return self.make_instr({ .sub_instr = instr });
+        }
+        case AST::BinaryOp::eMul: {
+            auto instr = MulInstruction{
+                .lhs_node_id = lhs_node_id,
+                .rhs_node_id = rhs_node_id,
+            };
+            return self.make_instr({ .mul_instr = instr });
+        }
+        case AST::BinaryOp::eDiv: {
+            auto instr = DivInstruction{
+                .lhs_node_id = lhs_node_id,
+                .rhs_node_id = rhs_node_id,
+            };
+            return self.make_instr({ .div_instr = instr });
+        }
+        case AST::BinaryOp::eCompGreater: {
+            auto instr = GreaterThanInstruction{
+                .lhs_node_id = lhs_node_id,
+                .rhs_node_id = rhs_node_id,
+            };
+            return self.make_instr({ .greater_than_instr = instr });
+        }
+        case AST::BinaryOp::eCompLess: {
+            auto instr = LessThanInstruction{
+                .lhs_node_id = lhs_node_id,
+                .rhs_node_id = rhs_node_id,
+            };
+            return self.make_instr({ .less_than_instr = instr });
+        }
+        case AST::BinaryOp::eCompEq: {
+            auto instr = EqualInstruction{
+                .lhs_node_id = lhs_node_id,
+                .rhs_node_id = rhs_node_id,
+            };
+            return self.make_instr({ .equal_instr = instr });
+        }
+        case AST::BinaryOp::eCompNotEq: {
+            auto instr = NotEqualInstruction{
+                .lhs_node_id = lhs_node_id,
+                .rhs_node_id = rhs_node_id,
+            };
+            return self.make_instr({ .not_equal_instr = instr });
+        }
+        case AST::BinaryOp::eCompGreaterEq: {
+            auto instr = GreaterThanEqualInstruction{
+                .lhs_node_id = lhs_node_id,
+                .rhs_node_id = rhs_node_id,
+            };
+            return self.make_instr({ .greater_than_eq_instr = instr });
+        }
+        case AST::BinaryOp::eCompLessEq: {
+            auto instr = LessThanEqualInstruction{
+                .lhs_node_id = lhs_node_id,
+                .rhs_node_id = rhs_node_id,
+            };
+            return self.make_instr({ .less_than_eq_instr = instr });
+        }
+
+        case AST::BinaryOp::eCompAnd:
+        case AST::BinaryOp::eCompOr:
+        case AST::BinaryOp::eMod:
+        case AST::BinaryOp::eBitAnd:
+        case AST::BinaryOp::eBitXor:
+        case AST::BinaryOp::eBitOr:
+        case AST::BinaryOp::eShiftLeft:
+        case AST::BinaryOp::eShiftRight:
+        case AST::BinaryOp::eRightExclusiveRange:
+        case AST::BinaryOp::eRightInclusiveRange:;
+    }
+
+    return NodeID::Invalid;
+}
+
 auto Builder::lower_identifier_expression(this Builder &self, AST::IdentifierExpression &expression) -> NodeID {
     auto var_node_id = self.symbol_map.lookup(expression.identifier_str);
     if (!var_node_id.has_value()) {
@@ -278,51 +366,44 @@ auto Builder::lower_assign_expression(this Builder &self, AST::AssignExpression 
     auto lhs_node_id = self.lower_expression(expression.lhs_expression_id);
     auto rhs_node_id = self.lower_expression(expression.rhs_expression_id);
 
-    auto alu_instr_id = NodeID::Invalid;
-    switch (expression.assign_type) {
-        case AST::AssignmentType::eAssign: {
-            alu_instr_id = rhs_node_id;
-        } break;
-        case AST::AssignmentType::eCompoundAdd: {
-            auto add_instr = AddInstruction{
-                .lhs_node_id = lhs_node_id,
-                .rhs_node_id = rhs_node_id,
-            };
-            alu_instr_id = self.make_instr({ .add_instr = add_instr });
-        } break;
-        case AST::AssignmentType::eCompoundSub: {
-            auto sub_instr = SubInstruction{
-                .lhs_node_id = lhs_node_id,
-                .rhs_node_id = rhs_node_id,
-            };
-            alu_instr_id = self.make_instr({ .sub_instr = sub_instr });
-        } break;
-        case AST::AssignmentType::eCompoundMul: {
-            auto mul_instr = MulInstruction{
-                .lhs_node_id = lhs_node_id,
-                .rhs_node_id = rhs_node_id,
-            };
-            alu_instr_id = self.make_instr({ .mul_instr = mul_instr });
-        } break;
-        case AST::AssignmentType::eCompoundDiv: {
-            auto div_instr = DivInstruction{
-                .lhs_node_id = lhs_node_id,
-                .rhs_node_id = rhs_node_id,
-            };
-            alu_instr_id = self.make_instr({ .div_instr = div_instr });
-        } break;
+    auto resulting_instr = rhs_node_id;
+    if (expression.assign_type != AST::AssignmentType::eAssign) {
+        auto op = AST::BinaryOp::eAdd;
+        switch (expression.assign_type) {
+            case AST::AssignmentType::eCompoundAdd: {
+                op = AST::BinaryOp::eAdd;
+            } break;
+            case AST::AssignmentType::eCompoundSub: {
+                op = AST::BinaryOp::eSub;
+            } break;
+            case AST::AssignmentType::eCompoundMul: {
+                op = AST::BinaryOp::eMul;
+            } break;
+            case AST::AssignmentType::eCompoundDiv: {
+                op = AST::BinaryOp::eDiv;
+            } break;
+            case AST::AssignmentType::eAssign: {
+                DEMIR_DEBUGBREAK();
+            } break;
+        }
+
+        resulting_instr = self.lower_binary_op(op, lhs_node_id, rhs_node_id);
     }
 
     auto store_instr = StoreInstruction{
         .dst_node_id = lhs_node_id,
-        .src_node_id = alu_instr_id,
+        .src_node_id = resulting_instr,
     };
 
     return self.make_instr({ .store_instr = store_instr });
 }
 
 auto Builder::lower_binary_op_expression(this Builder &self, AST::BinaryExpression &expression) -> NodeID {
-    return NodeID::Invalid;
+    auto lhs_node_id = self.lower_expression(expression.lhs_expression_id);
+    auto rhs_node_id = self.lower_expression(expression.rhs_expression_id);
+
+    // TODO: Handle cases when its actually an assignment op, insert implicit x == true
+    return self.lower_binary_op(expression.op, lhs_node_id, rhs_node_id);
 }
 
 auto Builder::lower_expression(this Builder &self, AST::NodeID expression_node_id) -> NodeID {
@@ -414,7 +495,7 @@ auto Builder::lower_decl_variable_statement(this Builder &self, AST::DeclareVarS
             .src_node_id = initializer_node_id,
         };
 
-        self.make_instr({.store_instr = store_instr});
+        self.make_instr({ .store_instr = store_instr });
     }
 
     self.symbol_map.add_symbol(statement.identifier_str, variable_id);
@@ -437,10 +518,10 @@ auto Builder::lower_return_statement(this Builder &self, AST::ReturnStatement &s
 
 auto Builder::lower_branch_statement(this Builder &self, AST::BranchStatement &statement) -> NodeID {
     auto condition_block_ids = std::vector<ConditionalBranchInstruction::Condition>();
-    for ([[maybe_unused]] const auto &cond : statement.conditions) {
+    for (const auto &cond : statement.conditions) {
         auto block_node_id = self.make_node({ .basic_block = {} });
-        // TODO: conditions
-        condition_block_ids.push_back({ .true_block_node_id = block_node_id });
+        auto condition_instr = self.lower_expression(cond.condition_expression_id);
+        condition_block_ids.push_back({ .condition_node_id = condition_instr, .true_block_node_id = block_node_id });
     }
 
     auto false_case_block_node_id = NodeID::Invalid;

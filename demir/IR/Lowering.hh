@@ -38,6 +38,7 @@ struct Builder {
     auto lower_type(this Builder &, const Type &type) -> NodeID;
     auto lower_type(this Builder &, AST::ExpressionValueKind value_kind) -> NodeID;
     auto lower_constant(this Builder &, const Constant &constant) -> NodeID;
+    auto lower_binary_op(this Builder &, AST::BinaryOp op, NodeID lhs_node_id, NodeID rhs_node_id) -> NodeID;
 
     auto lower_identifier_expression(this Builder &, AST::IdentifierExpression &expression) -> NodeID;
     auto lower_constant_expression(this Builder &, AST::ConstantValueExpression &expression) -> NodeID;

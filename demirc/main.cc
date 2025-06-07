@@ -134,6 +134,18 @@ auto instruction_kind_to_str(demir::IR::InstructionKind kind) -> std::string_vie
             return "OpMul";
         case demir::IR::InstructionKind::eDiv:
             return "OpDiv";
+        case demir::IR::InstructionKind::eEqual:
+            return "OpEqual";
+        case demir::IR::InstructionKind::eNotEqual:
+            return "OpNotEqual";
+        case demir::IR::InstructionKind::eGreaterThan:
+            return "OpGreaterThan";
+        case demir::IR::InstructionKind::eGreaterThanEqual:
+            return "OpGreaterThanEqual";
+        case demir::IR::InstructionKind::eLessThan:
+            return "OpLessThan";
+        case demir::IR::InstructionKind::eLessThanEqual:
+            return "OpLessThanEqual";
     }
 }
 
@@ -214,12 +226,16 @@ struct PrinterVisitor : demir::AST::Visitor {
         print_indented("Type: {}", assignment_to_str(v.assign_type));
         if (v.lhs_expression_id != demir::AST::NodeID::Invalid) {
             print_indented("LHS:");
+            push();
             visit(v.lhs_expression_id);
+            pop();
         }
 
         if (v.rhs_expression_id != demir::AST::NodeID::Invalid) {
             print_indented("RHS:");
+            push();
             visit(v.rhs_expression_id);
+            pop();
         }
 
         pop();
@@ -231,12 +247,16 @@ struct PrinterVisitor : demir::AST::Visitor {
         print_indented("Op: {}", binary_op_to_str(v.op));
         if (v.lhs_expression_id != demir::AST::NodeID::Invalid) {
             print_indented("LHS:");
+            push();
             visit(v.lhs_expression_id);
+            pop();
         }
 
         if (v.rhs_expression_id != demir::AST::NodeID::Invalid) {
             print_indented("RHS:");
+            push();
             visit(v.rhs_expression_id);
+            pop();
         }
         pop();
     }
@@ -318,14 +338,18 @@ struct PrinterVisitor : demir::AST::Visitor {
         print_indented("Branch statement:");
         push();
         print_indented("Conditions:");
+        push();
         for (const auto &cond : v.conditions) {
             visit(cond.condition_expression_id);
             visit(cond.true_case_statement_id);
         }
         if (v.false_case_statement_id != demir::AST::NodeID::Invalid) {
             print_indented("Else:");
+            push();
             visit(v.false_case_statement_id);
+            pop();
         }
+        pop();
         pop();
     }
 
@@ -439,7 +463,11 @@ int main(int, char *[]) {
                     case demir::IR::InstructionKind::eConditionalBranch: {
                         auto &cond_branch_instr = instr.conditional_branch_instr;
                         for (const auto &cond : cond_branch_instr.conditions) {
-                            fmt::print("[true_branch: %{}] ", std::to_underlying(cond.true_block_node_id));
+                            fmt::print(
+                                "[condition: %{}] [true_branch: %{}] ",
+                                std::to_underlying(cond.condition_node_id),
+                                std::to_underlying(cond.true_block_node_id)
+                            );
                         }
 
                         fmt::println("[false_branch: %{}] ", std::to_underlying(cond_branch_instr.false_block_node_id));
@@ -463,8 +491,14 @@ int main(int, char *[]) {
 
                     case demir::IR::InstructionKind::eAdd:
                     case demir::IR::InstructionKind::eSub:
+                    case demir::IR::InstructionKind::eMul:
                     case demir::IR::InstructionKind::eDiv:
-                    case demir::IR::InstructionKind::eMul: {
+                    case demir::IR::InstructionKind::eEqual:
+                    case demir::IR::InstructionKind::eNotEqual:
+                    case demir::IR::InstructionKind::eGreaterThan:
+                    case demir::IR::InstructionKind::eGreaterThanEqual:
+                    case demir::IR::InstructionKind::eLessThan:
+                    case demir::IR::InstructionKind::eLessThanEqual: {
                         auto &alu_instr = instr.add_instr;
                         fmt::println(//
                             "[lhs: %{}] [rhs: %{}]",

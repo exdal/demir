@@ -31,6 +31,12 @@ enum class InstructionKind : u32 {
     eSub,
     eMul,
     eDiv,
+    eEqual,
+    eNotEqual,
+    eGreaterThan,
+    eGreaterThanEqual,
+    eLessThan,
+    eLessThanEqual,
     // Function instructions
     eFunctionCall,
 };
@@ -39,6 +45,16 @@ template<InstructionKind KIND>
 struct InstructionHeader {
     NodeKind node_kind = NodeKind::eInstruction;
     InstructionKind instr_kind = KIND;
+};
+
+// @grok what should i rename this to?
+template<InstructionKind KIND>
+struct HandedInstruction {
+    NodeKind node_kind = NodeKind::eInstruction;
+    InstructionKind instr_kind = KIND;
+
+    NodeID lhs_node_id = NodeID::Invalid;
+    NodeID rhs_node_id = NodeID::Invalid;
 };
 
 // Terminating instruction, must be at the end of the block.
@@ -87,25 +103,17 @@ struct StoreInstruction : InstructionHeader<InstructionKind::eStore> {
     NodeID src_node_id = NodeID::Invalid;
 };
 
-struct AddInstruction : InstructionHeader<InstructionKind::eAdd> {
-    NodeID lhs_node_id = NodeID::Invalid;
-    NodeID rhs_node_id = NodeID::Invalid;
-};
+using AddInstruction = HandedInstruction<InstructionKind::eAdd>;
+using SubInstruction = HandedInstruction<InstructionKind::eSub>;
+using DivInstruction = HandedInstruction<InstructionKind::eDiv>;
+using MulInstruction = HandedInstruction<InstructionKind::eMul>;
 
-struct SubInstruction : InstructionHeader<InstructionKind::eSub> {
-    NodeID lhs_node_id = NodeID::Invalid;
-    NodeID rhs_node_id = NodeID::Invalid;
-};
-
-struct DivInstruction : InstructionHeader<InstructionKind::eDiv> {
-    NodeID lhs_node_id = NodeID::Invalid;
-    NodeID rhs_node_id = NodeID::Invalid;
-};
-
-struct MulInstruction : InstructionHeader<InstructionKind::eMul> {
-    NodeID lhs_node_id = NodeID::Invalid;
-    NodeID rhs_node_id = NodeID::Invalid;
-};
+using EqualInstruction = HandedInstruction<InstructionKind::eEqual>;
+using NotEqualInstruction = HandedInstruction<InstructionKind::eNotEqual>;
+using GreaterThanInstruction = HandedInstruction<InstructionKind::eGreaterThan>;
+using GreaterThanEqualInstruction = HandedInstruction<InstructionKind::eGreaterThanEqual>;
+using LessThanInstruction = HandedInstruction<InstructionKind::eLessThan>;
+using LessThanEqualInstruction = HandedInstruction<InstructionKind::eLessThanEqual>;
 
 struct FunctionCallInstruction : InstructionHeader<InstructionKind::eFunctionCall> {
     NodeID return_type_node_id = NodeID::Invalid;
@@ -128,6 +136,12 @@ union Instruction {
     SubInstruction sub_instr;
     MulInstruction mul_instr;
     DivInstruction div_instr;
+    EqualInstruction equal_instr;
+    NotEqualInstruction not_equal_instr;
+    GreaterThanInstruction greater_than_instr;
+    GreaterThanEqualInstruction greater_than_eq_instr;
+    LessThanInstruction less_than_instr;
+    LessThanEqualInstruction less_than_eq_instr;
 
     FunctionCallInstruction function_call_instr;
 };
