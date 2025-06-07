@@ -208,6 +208,12 @@ auto Parser::next(this Parser &self) -> const Token & {
     return token;
 }
 
+auto Parser::parse_identifier_str(this Parser &self) -> std::string_view {
+    const auto &token = self.expect(self.next(), TokenKind::eIdentifier);
+
+    return self.allocator->alloc_str(token.string(self.source));
+}
+
 auto Parser::parse_intrinsic_type(this Parser &self) -> AST::ExpressionValueKind {
     const auto &token = self.peek();
 
@@ -321,7 +327,7 @@ auto Parser::parse_single_statement(this Parser &self) -> AST::NodeID {
 auto Parser::parse_variable_decl_statement(this Parser &self) -> AST::NodeID {
     self.expect(self.next(), TokenKind::eLet);
 
-    auto identifier_expression = self.parse_identifier_expression();
+    auto identifier_str = self.parse_identifier_str();
 
     auto value_kind = AST::ExpressionValueKind::eNone;
     if (self.peek().is(TokenKind::eColon)) {
@@ -341,7 +347,7 @@ auto Parser::parse_variable_decl_statement(this Parser &self) -> AST::NodeID {
     self.expect(self.next(), TokenKind::eSemiColon);
 
     auto decl_var_statement = AST::DeclareVarStatement{};
-    decl_var_statement.identifier_expression_id = identifier_expression;
+    decl_var_statement.identifier_str = identifier_str;
     decl_var_statement.value_kind = value_kind;
     decl_var_statement.initial_expression_id = initial_expression_id;
 
@@ -351,7 +357,7 @@ auto Parser::parse_variable_decl_statement(this Parser &self) -> AST::NodeID {
 auto Parser::parse_function_decl_statement(this Parser &self) -> AST::NodeID {
     self.expect(self.next(), TokenKind::eFn);
 
-    auto identifier_expression = self.parse_identifier_expression();
+    auto identifier_str = self.parse_identifier_str();
 
     self.expect(self.next(), TokenKind::eParenLeft);
 
@@ -366,12 +372,12 @@ auto Parser::parse_function_decl_statement(this Parser &self) -> AST::NodeID {
             self.expect(self.next(), TokenKind::eComma);
         }
 
-        auto param_identifier_expression = self.parse_identifier_expression();
+        auto param_identifier_str = self.parse_identifier_str();
         self.expect(self.next(), TokenKind::eColon);
         auto param_type_kind = self.parse_intrinsic_type();
         self.next();
 
-        params.push_back({ .identifier_expression_id = param_identifier_expression, .value_kind = param_type_kind });
+        params.push_back({ .identifier_str = param_identifier_str, .value_kind = param_type_kind });
         first_param = false;
     }
 
@@ -388,7 +394,7 @@ auto Parser::parse_function_decl_statement(this Parser &self) -> AST::NodeID {
     auto body_statement = self.parse_statement();
 
     auto decl_function_statement = AST::DeclareFunctionStatement{};
-    decl_function_statement.identifier_expression_id = identifier_expression;
+    decl_function_statement.identifier_str = identifier_str;
     decl_function_statement.parameters = self.allocator->copy_into(Span(params));
     decl_function_statement.return_value_kind = return_type_kind;
     decl_function_statement.body_statement_id = body_statement;
@@ -613,11 +619,8 @@ auto Parser::parse_expression_list(this Parser &self, TokenKind terminator) -> s
 }
 
 auto Parser::parse_identifier_expression(this Parser &self) -> AST::NodeID {
-    const auto &token = self.expect(self.next(), TokenKind::eIdentifier);
-    auto identifier_str = self.allocator->alloc_str(token.string(self.source));
-
     auto identifier_expression = AST::IdentifierExpression{};
-    identifier_expression.identifier_str = identifier_str;
+    identifier_expression.identifier_str = self.parse_identifier_str();
 
     return self.make_node({ .identifier_expression = identifier_expression });
 }

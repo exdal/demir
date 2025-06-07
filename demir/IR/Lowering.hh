@@ -2,10 +2,10 @@
 
 #include "demir/AST/Module.hh"
 #include "demir/Core/BumpAllocator.hh"
+#include "demir/Core/SymbolMap.hh"
 #include "demir/IR/Module.hh"
 #include "demir/IR/Node.hh"
 
-#include <ankerl/unordered_dense.h>
 #include <vector>
 
 namespace demir::IR {
@@ -17,12 +17,12 @@ struct Builder {
 
     std::vector<NodeID> unique_type_node_ids = {};
     std::vector<NodeID> unique_constant_node_ids = {};
-    ankerl::unordered_dense::map<std::string_view, NodeID> identifier_map = {};
 
     NodeID active_basic_block_node_id = NodeID::Invalid;
     std::vector<NodeID> current_function_block_node_ids = {};
     std::vector<NodeID> current_block_variable_node_ids = {};
     std::vector<NodeID> current_block_instr_node_ids = {};
+    SymbolMap<std::string_view, NodeID> symbol_map = {};
 
     Builder() = default;
     Builder(BumpAllocator *allocator_, AST::Module *module_) : allocator(allocator_), module(module_) {}
@@ -39,12 +39,16 @@ struct Builder {
     auto lower_type(this Builder &, AST::ExpressionValueKind value_kind) -> NodeID;
     auto lower_constant(this Builder &, const Constant &constant) -> NodeID;
 
+    auto lower_identifier_expression(this Builder &, AST::IdentifierExpression &expression) -> NodeID;
     auto lower_constant_expression(this Builder &, AST::ConstantValueExpression &expression) -> NodeID;
+    auto lower_assign_expression(this Builder &, AST::AssignExpression &expression) -> NodeID;
+    auto lower_binary_op_expression(this Builder &, AST::BinaryExpression &expression) -> NodeID;
+    // general expression lowering
+    auto lower_expression(this Builder &, AST::NodeID expression_node_id) -> NodeID;
 
     auto lower_decl_function_statement(this Builder &, AST::DeclareFunctionStatement &statement) -> NodeID;
     auto begin_function(this Builder &, NodeID func_node_id) -> void;
     auto end_function(this Builder &, NodeID func_node_id) -> void;
-
     auto lower_decl_variable_statement(this Builder &, AST::DeclareVarStatement &statement) -> NodeID;
     auto lower_return_statement(this Builder &, AST::ReturnStatement &statement) -> NodeID;
     auto lower_branch_statement(this Builder &, AST::BranchStatement &statement) -> NodeID;

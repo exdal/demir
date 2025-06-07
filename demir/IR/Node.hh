@@ -79,8 +79,8 @@ struct LoadInstruction : InstructionHeader<InstructionKind::eLoad> {
 };
 
 struct StoreInstruction : InstructionHeader<InstructionKind::eStore> {
-    NodeID variable_node_id = NodeID::Invalid;
-    NodeID value_node_id = NodeID::Invalid;
+    NodeID dst_node_id = NodeID::Invalid;
+    NodeID src_node_id = NodeID::Invalid;
 };
 
 struct FunctionCallInstruction : InstructionHeader<InstructionKind::eFunctionCall> {

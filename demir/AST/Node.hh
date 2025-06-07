@@ -130,20 +130,20 @@ struct MultiStatement {
 struct DeclareVarStatement {
     NodeKind kind = NodeKind::eDeclareVarStatement;
 
-    NodeID identifier_expression_id = NodeID::Invalid;
+    std::string_view identifier_str = {};
     ExpressionValueKind value_kind = ExpressionValueKind::eNone;
     NodeID initial_expression_id = NodeID::Invalid;
 };
 
 struct DeclareFunctionStatement {
     struct Parameter {
-        NodeID identifier_expression_id = NodeID::Invalid;
+        std::string_view identifier_str = {};
         ExpressionValueKind value_kind = ExpressionValueKind::eNone;
     };
 
     NodeKind kind = NodeKind::eDeclareFunctionStatement;
 
-    NodeID identifier_expression_id = NodeID::Invalid;
+    std::string_view identifier_str = {};
     Span<Parameter> parameters = {};
     ExpressionValueKind return_value_kind = ExpressionValueKind::eNone;
     NodeID body_statement_id = NodeID::Invalid;

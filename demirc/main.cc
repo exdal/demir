@@ -7,6 +7,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <utility>
 
 #include <fmt/core.h>
 
@@ -164,10 +165,7 @@ struct PrinterVisitor : demir::AST::Visitor {
     }
 
     auto visit(demir::AST::IdentifierExpression &v) -> void override {
-        print_indented("Identifier expression:");
-        push();
-        print_indented("Identifier: {}", v.identifier_str);
-        pop();
+        print_indented("Identifier expression: {}", v.identifier_str);
     }
 
     auto visit(demir::AST::ConstantValueExpression &v) -> void override {
@@ -257,7 +255,7 @@ struct PrinterVisitor : demir::AST::Visitor {
     auto visit(demir::AST::DeclareVarStatement &v) -> void override {
         print_indented("Declare var statement:");
         push();
-        visit(v.identifier_expression_id);
+        print_indented("Identifier: {}", v.identifier_str);
         print_indented("Type: {}", expression_value_kind_to_str(v.value_kind));
         if (v.initial_expression_id != demir::AST::NodeID::Invalid) {
             visit(v.initial_expression_id);
@@ -268,9 +266,9 @@ struct PrinterVisitor : demir::AST::Visitor {
     auto visit(demir::AST::DeclareFunctionStatement &v) -> void override {
         print_indented("Declare function statement:");
         push();
-        visit(v.identifier_expression_id);
+        print_indented("Identifier: {}", v.identifier_str);
         for (const auto &param : v.parameters) {
-            visit(param.identifier_expression_id);
+            print_indented("Parameter identifier: {}", param.identifier_str);
             print_indented("Parameter type: {}", expression_value_kind_to_str(param.value_kind));
         }
 
@@ -342,16 +340,16 @@ struct PrinterVisitor : demir::AST::Visitor {
         pop();
     }
 
-    auto visit(demir::AST::BreakStatement &v) -> void override {
+    auto visit(demir::AST::BreakStatement &) -> void override {
         print_indented("Break statement");
     }
 
-    auto visit(demir::AST::ContinueStatement &v) -> void override {
+    auto visit(demir::AST::ContinueStatement &) -> void override {
         print_indented("Continue statement");
     }
 };
 
-int main(int argc, char *argv[]) {
+int main(int, char *[]) {
     auto source = std::string();
     std::ifstream file(std::filesystem::current_path() / "test.rs", std::ios::binary | std::ios::ate);
     source.resize(file.tellg());
@@ -438,11 +436,25 @@ int main(int argc, char *argv[]) {
 
                         fmt::println("[false_branch: %{}] ", std::to_underlying(cond_branch_instr.false_block_node_id));
                     } break;
+                    case demir::IR::InstructionKind::eLoad: {
+                        auto &load_instr = instr.load_instr;
+                        fmt::println(
+                            "[type: %{}] [variable: %{}]",
+                            std::to_underlying(load_instr.type_node_id),
+                            std::to_underlying(load_instr.variable_node_id)
+                        );
+                    } break;
+                    case demir::IR::InstructionKind::eStore: {
+                        auto &store_instr = instr.store_instr;
+                        fmt::println(
+                            "[dst: %{}] [src: %{}]",
+                            std::to_underlying(store_instr.dst_node_id),
+                            std::to_underlying(store_instr.src_node_id)
+                        );
+                    } break;
                     case demir::IR::InstructionKind::eMultiwayBranch:
-                    case demir::IR::InstructionKind::eLoad:
-                    case demir::IR::InstructionKind::eStore:
-                    case demir::IR::InstructionKind::eFunctionCall:
-                        break;
+                    case demir::IR::InstructionKind::eFunctionCall: {
+                    } break;
                 }
             }
         }

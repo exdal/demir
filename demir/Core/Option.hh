@@ -1,5 +1,6 @@
 #pragma once
 
+#include "demir/Core/Compiler.hh"
 #include "demir/Core/Types.hh"
 
 #include <limits>
@@ -110,24 +111,24 @@ public:
 
     template<typename Self>
     constexpr auto reset(this Self &&self) -> void {
-        self.value = option_flag_val<T>::nullopt;
+        self.holding = option_flag_val<T>::nullopt;
     }
 
     template<typename Self>
     constexpr auto has_value(this Self &&self) -> bool {
-        return self.value != option_flag_val<T>::nullopt;
+        return self.holding != option_flag_val<T>::nullopt;
     }
 
     template<typename Self>
-    [[nodiscard]] constexpr auto value(this Self &&self) -> T && {
+    [[nodiscard]] constexpr auto value(this Self &&self) -> auto && {
         DEMIR_EXPECT(self.has_value());
 
-        return std::forward<option_flag_val<T>>()(self).holding;
+        return std::forward<Self>(self).holding;
     }
 
     template<typename U, typename Self>
     [[nodiscard]] constexpr auto value_or(this Self &&self, U &&default_value) -> T {
-        return self.has_value() ? self.holder : static_cast<T>(std::forward<U>(default_value));
+        return self.has_value() ? self.holding : static_cast<T>(std::forward<U>(default_value));
     }
 
     template<typename Self, typename Fn>

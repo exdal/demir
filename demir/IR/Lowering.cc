@@ -21,29 +21,31 @@ struct BuilderVisitor : AST::Visitor {
         builder->lower_constant_expression(expression);
     }
 
-    auto visit(AST::AssignExpression &) -> void override {}
-    auto visit(AST::BinaryExpression &) -> void override {}
+    auto visit(AST::AssignExpression &expression) -> void override {
+        builder->lower_assign_expression(expression);
+    }
+
+    auto visit(AST::BinaryExpression &expression) -> void override {
+        builder->lower_binary_op_expression(expression);
+    }
+
     auto visit(AST::CallFunctionExpression &) -> void override {}
 
     auto visit(AST::MultiStatement &statement) -> void override {
-        // NOTE: Do not confuse statements with blocks.
         for (auto statement_id : statement.statement_ids) {
             visit(statement_id);
         }
     }
 
     auto visit(AST::DeclareVarStatement &statement) -> void override {
-        visit(statement.initial_expression_id);
         builder->lower_decl_variable_statement(statement);
     }
 
     auto visit(AST::DeclareFunctionStatement &statement) -> void override {
-        // Lower function header
-        auto node_id = builder->lower_decl_function_statement(statement);
-
-        builder->begin_function(node_id);
+        auto func_node_id = builder->lower_decl_function_statement(statement);
+        builder->begin_function(func_node_id);
         visit(statement.body_statement_id);
-        builder->end_function(node_id);
+        builder->end_function(func_node_id);
     }
 
     auto visit(AST::ReturnStatement &statement) -> void override {
@@ -51,7 +53,10 @@ struct BuilderVisitor : AST::Visitor {
         builder->lower_return_statement(statement);
     }
 
-    auto visit(AST::ExpressionStatement &) -> void override {}
+    auto visit(AST::ExpressionStatement &statement) -> void override {
+        visit(statement.expression_id);
+    }
+
     auto visit(AST::WhileStatement &) -> void override {}
 
     auto visit(AST::BranchStatement &statement) -> void override {
@@ -60,15 +65,19 @@ struct BuilderVisitor : AST::Visitor {
         auto &conditional_branch_instr = node->instruction.conditional_branch_instr;
 
         for (const auto &[statement_cond, instr_cond] : std::views::zip(statement.conditions, conditional_branch_instr.conditions)) {
+            builder->symbol_map.push_scope();
             builder->set_active_basic_block(instr_cond.true_block_node_id);
             visit(statement_cond.true_case_statement_id);
             builder->set_active_basic_block(NodeID::Invalid);
+            builder->symbol_map.pop_scope();
         }
 
         if (statement.false_case_statement_id != AST::NodeID::Invalid) {
+            builder->symbol_map.push_scope();
             builder->set_active_basic_block(conditional_branch_instr.false_block_node_id);
             visit(statement.false_case_statement_id);
             builder->set_active_basic_block(NodeID::Invalid);
+            builder->symbol_map.pop_scope();
         }
     }
 
@@ -244,9 +253,76 @@ auto Builder::lower_constant(this Builder &self, const Constant &constant) -> No
     return new_const_node_id;
 }
 
+auto Builder::lower_identifier_expression(this Builder &self, AST::IdentifierExpression &expression) -> NodeID {
+    auto var_node_id = self.symbol_map.lookup(expression.identifier_str);
+    if (!var_node_id.has_value()) {
+        // ???
+        DEMIR_DEBUGBREAK();
+    }
+
+    auto *var_node = self.get_node(var_node_id.value());
+    auto load_instr = LoadInstruction{
+        .type_node_id = var_node->variable.type_node_id,
+        .variable_node_id = var_node_id.value(),
+    };
+
+    return self.make_instr({ .load_instr = load_instr });
+}
+
 auto Builder::lower_constant_expression(this Builder &self, AST::ConstantValueExpression &expression) -> NodeID {
     auto lowered_type_node_id = self.lower_type(expression.value.kind);
     return self.lower_constant(Constant{ .type_node_id = lowered_type_node_id, .u64_value = expression.value.u64_val });
+}
+
+auto Builder::lower_assign_expression(this Builder &self, AST::AssignExpression &expression) -> NodeID {
+    auto lhs_node_id = self.lower_expression(expression.lhs_expression_id);
+    auto rhs_node_id = self.lower_expression(expression.rhs_expression_id);
+    switch (expression.assign_type) {
+        case AST::AssignmentType::eAssign: {
+            auto store_instr = StoreInstruction{
+                .dst_node_id = lhs_node_id,
+                .src_node_id = rhs_node_id,
+            };
+
+            return self.make_instr({ .store_instr = store_instr });
+        }
+        case AST::AssignmentType::eCompoundAdd:
+        case AST::AssignmentType::eCompoundSub:
+        case AST::AssignmentType::eCompoundMul:
+        case AST::AssignmentType::eCompoundDiv:
+            break;
+    }
+
+    return NodeID::Invalid;
+}
+
+auto Builder::lower_binary_op_expression(this Builder &self, AST::BinaryExpression &expression) -> NodeID {
+    return NodeID::Invalid;
+}
+
+auto Builder::lower_expression(this Builder &self, AST::NodeID expression_node_id) -> NodeID {
+    auto *expression_node = self.module->get_node(expression_node_id);
+    switch (expression_node->kind) {
+        case AST::NodeKind::eIdentifierExpression: {
+            return self.lower_identifier_expression(expression_node->identifier_expression);
+        }
+        case AST::NodeKind::eConstantValueExpression: {
+            return self.lower_constant_expression(expression_node->const_value_expression);
+        }
+        case AST::NodeKind::eAssignExpression: {
+            return self.lower_assign_expression(expression_node->assign_expression);
+        }
+        case AST::NodeKind::eBinaryExpression: {
+            return self.lower_binary_op_expression(expression_node->binary_expression);
+        }
+        // TODO: function calls
+        case AST::NodeKind::eCallFunctionExpression:
+        default: {
+            // Only expressions are allowed
+            DEMIR_DEBUGBREAK();
+            return NodeID::Invalid;
+        }
+    }
 }
 
 auto Builder::lower_decl_function_statement(this Builder &self, AST::DeclareFunctionStatement &statement) -> NodeID {
@@ -260,16 +336,22 @@ auto Builder::lower_decl_function_statement(this Builder &self, AST::DeclareFunc
         .parameter_type_node_ids = self.allocator->copy_into(Span(param_type_node_ids)),
         .return_type_node_id = return_type_node_id,
     };
-    return self.make_node({ .function = function });
+    auto func_node_id = self.make_node({ .function = function });
+
+    self.symbol_map.add_symbol(statement.identifier_str, func_node_id);
+
+    return func_node_id;
 }
 
 auto Builder::begin_function(this Builder &self, [[maybe_unused]] NodeID func_node_id) -> void {
+    self.symbol_map.push_scope();
     auto starter_block_id = self.make_node({ .basic_block = {} });
     self.set_active_basic_block(starter_block_id);
 }
 
 auto Builder::end_function(this Builder &self, NodeID func_node_id) -> void {
     self.set_active_basic_block(NodeID::Invalid);
+    self.symbol_map.pop_scope();
 
     // NO NODE INSERTIONS PAST THIS FUNCTION
     auto *lowered_node = self.get_node(func_node_id);
@@ -280,11 +362,12 @@ auto Builder::end_function(this Builder &self, NodeID func_node_id) -> void {
 
 auto Builder::lower_decl_variable_statement(this Builder &self, AST::DeclareVarStatement &statement) -> NodeID {
     auto type_node_id = self.lower_type(statement.value_kind);
-
     auto variable = Variable{
         .type_node_id = type_node_id,
     };
     auto variable_id = self.make_node({ .variable = variable });
+
+    self.symbol_map.add_symbol(statement.identifier_str, variable_id);
 
     if (self.active_basic_block_node_id != NodeID::Invalid) {
         self.current_block_variable_node_ids.push_back(variable_id);
@@ -328,7 +411,12 @@ auto lower_ast_module(BumpAllocator *allocator, AST::Module *ast_module) -> Modu
     auto ir_visitor = BuilderVisitor(&ir_builder);
     ir_visitor.visit(ast_module->root_node_id);
 
-    return Module(std::move(ir_builder.nodes), std::move(ir_builder.unique_type_node_ids), std::move(ir_builder.unique_constant_node_ids));
+    return Module(
+        std::move(ir_builder.nodes),
+        std::move(ir_builder.unique_type_node_ids),
+        std::move(ir_builder.unique_constant_node_ids),
+        std::move(ir_builder.symbol_map)
+    );
 }
 
 } // namespace demir::IR
