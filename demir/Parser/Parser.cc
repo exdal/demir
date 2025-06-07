@@ -449,7 +449,6 @@ auto Parser::parse_branch_statement(this Parser &self) -> AST::NodeID {
         }
 
         self.expect(self.next(), TokenKind::eIf);
-
         auto condition_expression_id = self.parse_expression();
         auto true_case_statement_id = self.parse_statement();
 
@@ -535,6 +534,8 @@ auto Parser::parse_expression(this Parser &self, AST::Precedence precedence) -> 
 }
 
 auto Parser::parse_expression_with_precedence(this Parser &self, AST::Precedence precedence, AST::NodeID lhs_expression_id) -> AST::NodeID {
+    auto expression_id = lhs_expression_id;
+
     while (!self.peek().is(TokenKind::eEof)) {
         const auto &op_token = self.peek();
         auto op_kind = op_token.kind;
@@ -548,11 +549,16 @@ auto Parser::parse_expression_with_precedence(this Parser &self, AST::Precedence
         self.next();
         auto rhs_expression_id = self.parse_primary_expression();
 
-        const auto &next_token = self.peek();
-        auto next_prec = token_kind_to_precedence(next_token.kind);
-        auto next_prec_level = std::to_underlying(next_prec);
-        if (op_prec_level < next_prec_level) {
-            rhs_expression_id = self.parse_expression_with_precedence(static_cast<AST::Precedence>(op_prec_level + 1), rhs_expression_id);
+        while (!self.peek().is(TokenKind::eEof)) {
+            const auto &next_token = self.peek();
+            auto next_prec = token_kind_to_precedence(next_token.kind);
+            auto next_prec_level = std::to_underlying(next_prec);
+            auto associate_right = next_prec == AST::Precedence::eAssignment;
+            if (associate_right ? (next_prec_level < op_prec_level) : (next_prec_level <= op_prec_level)) {
+                break;
+            }
+
+            rhs_expression_id = self.parse_expression_with_precedence(next_prec, rhs_expression_id);
         }
 
         if (op_prec == AST::Precedence::eAssignment) {
@@ -561,7 +567,7 @@ auto Parser::parse_expression_with_precedence(this Parser &self, AST::Precedence
             assign_expression.lhs_expression_id = lhs_expression_id;
             assign_expression.rhs_expression_id = rhs_expression_id;
 
-            return self.make_node({ .assign_expression = assign_expression });
+            expression_id = self.make_node({ .assign_expression = assign_expression });
         } else {
             auto binary_op = token_kind_to_binary_op(op_kind);
             if (!binary_op.has_value()) {
@@ -573,11 +579,11 @@ auto Parser::parse_expression_with_precedence(this Parser &self, AST::Precedence
             binary_op_expression.lhs_expression_id = lhs_expression_id;
             binary_op_expression.rhs_expression_id = rhs_expression_id;
 
-            return self.make_node({ .binary_expression = binary_op_expression });
+            expression_id = self.make_node({ .binary_expression = binary_op_expression });
         }
     }
 
-    return lhs_expression_id;
+    return expression_id;
 }
 
 auto Parser::parse_primary_expression(this Parser &self) -> AST::NodeID {
@@ -594,6 +600,11 @@ auto Parser::parse_primary_expression(this Parser &self) -> AST::NodeID {
         case TokenKind::eIntegerLiteral: {
             expression_id = self.parse_const_value_expression();
         } break;
+        case TokenKind::eParenLeft: {
+            self.expect(self.next(), TokenKind::eParenLeft);
+            expression_id = self.parse_expression();
+            self.expect(self.next(), TokenKind::eParenRight);
+        }break;
         default: {
             throw ParserUnexpectedTokenError(token.location);
         }
