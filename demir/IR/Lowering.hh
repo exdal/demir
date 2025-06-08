@@ -34,6 +34,7 @@ struct Builder {
     auto set_active_basic_block(this Builder &, NodeID basic_block_id) -> void;
     auto active_block(this Builder &) -> BasicBlock *;
     auto ensure_block(this Builder &) -> void;
+    auto terminate_active_block(this Builder &, NodeID branching_block_id) -> void;
 
     auto lower_type(this Builder &, const Type &type) -> NodeID;
     auto lower_type(this Builder &, AST::ExpressionValueKind value_kind) -> NodeID;

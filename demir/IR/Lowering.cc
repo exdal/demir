@@ -73,13 +73,7 @@ struct BuilderVisitor : AST::Visitor {
             builder->symbol_map.push_scope();
             builder->set_active_basic_block(instr_cond.true_block_node_id);
             visit(statement_cond.true_case_statement_id);
-
-            auto *active_block = builder->active_block();
-            if (active_block->terminator_node_id == NodeID::Invalid) {
-                builder->make_instr({ .branch_instr = { .next_block_node_id = exiting_block_node_id } });
-            }
-
-            builder->set_active_basic_block(NodeID::Invalid);
+            builder->terminate_active_block(exiting_block_node_id);
             builder->symbol_map.pop_scope();
         }
 
@@ -87,7 +81,7 @@ struct BuilderVisitor : AST::Visitor {
             builder->symbol_map.push_scope();
             builder->set_active_basic_block(false_cond_node_id);
             visit(statement.false_case_statement_id);
-            builder->set_active_basic_block(NodeID::Invalid);
+            builder->terminate_active_block(exiting_block_node_id);
             builder->symbol_map.pop_scope();
         }
 
@@ -155,6 +149,15 @@ auto Builder::active_block(this Builder &self) -> BasicBlock * {
 
 auto Builder::ensure_block(this Builder &self) -> void {
     DEMIR_EXPECT(self.active_basic_block_node_id != NodeID::Invalid);
+}
+
+auto Builder::terminate_active_block(this Builder &self, NodeID branching_block_id) -> void {
+    auto *active_block = self.active_block();
+    if (active_block && active_block->terminator_node_id == NodeID::Invalid) {
+        self.make_instr({ .branch_instr = { .next_block_node_id = branching_block_id } });
+    }
+
+    self.set_active_basic_block(NodeID::Invalid);
 }
 
 auto Builder::lower_type(this Builder &self, const Type &type) -> NodeID {
@@ -481,7 +484,7 @@ auto Builder::begin_function(this Builder &self, [[maybe_unused]] NodeID func_no
 auto Builder::end_function(this Builder &self, NodeID func_node_id) -> void {
     // handle implicit return
     auto *active_block = self.active_block();
-    if (active_block->terminator_node_id == NodeID::Invalid) {
+    if (active_block && active_block->terminator_node_id == NodeID::Invalid) {
         auto void_type_id = self.lower_type(Type{ .type_kind = TypeKind::eVoid });
 
         // TODO: Error handling
