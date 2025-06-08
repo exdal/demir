@@ -32,12 +32,13 @@ private:
 
     auto parse_identifier_str(this Parser &) -> std::string_view;
     auto parse_intrinsic_type(this Parser &) -> AST::ExpressionValueKind;
+    auto parse_attributes(this Parser &) -> std::vector<AST::Attribute>;
 
     auto parse_statement(this Parser &, bool root = false) -> AST::NodeID;
     auto parse_multi_statement(this Parser &) -> AST::NodeID;
     auto parse_single_statement(this Parser &) -> AST::NodeID;
     auto parse_variable_decl_statement(this Parser &) -> AST::NodeID;
-    auto parse_function_decl_statement(this Parser &) -> AST::NodeID;
+    auto parse_function_decl_statement(this Parser &, std::vector<AST::Attribute> attributes = {}) -> AST::NodeID;
     auto parse_return_statement(this Parser &) -> AST::NodeID;
     auto parse_expression_statement(this Parser &) -> AST::NodeID;
     auto parse_while_statement(this Parser &) -> AST::NodeID;

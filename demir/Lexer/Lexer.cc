@@ -102,9 +102,9 @@ auto Lexer::read_line_comment(this Lexer &self) -> Token {
     auto start_pos = self.position();
     auto start_off = self.offset;
 
-    do {
+    while (self.peek() != 0 && self.peek() != '\n') {
         self.consume();
-    } while (self.peek() != 0 && self.peek() != '\n');
+    }
 
     return Token(TokenKind::eLineComment, Location(start_pos, self.position()), start_off, self.offset - start_off);
 }
@@ -113,9 +113,9 @@ auto Lexer::read_block_comment(this Lexer &self) -> Token {
     auto start_pos = self.position();
     auto start_off = self.offset;
 
-    do {
+    while (self.peek() != 0 && !(self.peek() == '*' && self.peek(1) == '/')) {
         self.consume();
-    } while (self.peek() != 0 && !(self.peek() == '*' && self.peek(1) == '/'));
+    }
 
     self.consume();
     self.consume();

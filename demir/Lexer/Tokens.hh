@@ -6,6 +6,10 @@
     #define KEYWORD(name, str) TOKEN(name)
 #endif
 
+#ifndef ATTRIBUTE
+    #define ATTRIBUTE(name, str) TOKEN(name)
+#endif
+
 #ifndef PUNCTUATOR
     #define PUNCTUATOR(name, str) TOKEN(name)
 #endif
@@ -27,17 +31,12 @@ KEYWORD(Let, "let")
 KEYWORD(Var, "var")
 KEYWORD(Fn, "fn")
 KEYWORD(Return, "return")
-KEYWORD(Struct, "struct")
-KEYWORD(Pub, "pub")
 KEYWORD(If, "if")
 KEYWORD(Else, "else")
 KEYWORD(While, "while")
-KEYWORD(For, "for")
 KEYWORD(Break, "break")
 KEYWORD(Continue, "continue")
 KEYWORD(Match, "match")
-KEYWORD(As, "as")
-KEYWORD(Static, "static")
 KEYWORD(Bool, "bool")
 KEYWORD(i8, "i8")
 KEYWORD(u8, "u8")
@@ -49,6 +48,10 @@ KEYWORD(i64, "i64")
 KEYWORD(u64, "u64")
 KEYWORD(f32, "f32")
 KEYWORD(f64, "f64")
+
+ATTRIBUTE(Builtin, "builtin")
+ATTRIBUTE(Shader, "shader")
+ATTRIBUTE(Threads, "threads")
 
 PUNCTUATOR(Equal, "=")
 PUNCTUATOR(Add, "+")
@@ -108,6 +111,7 @@ LITERAL(BlockComment)
 
 #undef TOKEN
 #undef KEYWORD
+#undef ATTRIBUTE
 #undef PUNCTUATOR
 #undef LITERAL
 #undef MISC

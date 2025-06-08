@@ -1,5 +1,6 @@
 #include "demir/Parser/Parser.hh"
 
+#include "demir/Core/FNV.hh"
 #include "demir/Lexer/Lexer.hh"
 #include "demir/Parser/Diagnostics.hh"
 
@@ -234,6 +235,63 @@ auto Parser::parse_intrinsic_type(this Parser &self) -> AST::ExpressionValueKind
     }
 }
 
+auto Parser::parse_attributes(this Parser &self) -> std::vector<AST::Attribute> {
+    auto attributes = std::vector<AST::Attribute>();
+
+    self.expect(self.next(), TokenKind::eHash);
+    self.expect(self.next(), TokenKind::eSquareLeft);
+
+    auto is_first = true;
+    while (!self.peek().is(TokenKind::eSquareRight)) {
+        if (!is_first) {
+            self.expect(self.next(), TokenKind::eComma);
+        }
+
+        const auto &attrib_token = self.peek();
+        self.next();
+        switch (attrib_token.kind) {
+            case TokenKind::eBuiltin: {
+            } break;
+            case TokenKind::eShader: {
+                self.expect(self.next(), TokenKind::eParenLeft);
+                const auto &string_token = self.expect(self.next(), TokenKind::eStringLiteral);
+                auto shader_kind_str = string_token.string(self.source);
+
+                auto shader_kind = AST::ShaderKind::eNone;
+                switch (fnv64(shader_kind_str)) {
+                    case fnv64_c("vertex"): {
+                        shader_kind = AST::ShaderKind::eVertex;
+                    } break;
+                    case fnv64_c("fragment"): {
+                        shader_kind = AST::ShaderKind::eFragment;
+                    } break;
+                    case fnv64_c("compute"): {
+                        shader_kind = AST::ShaderKind::eCompute;
+                    } break;
+                    default: {
+                        throw ParserUnexpectedTokenError(string_token.location);
+                    }
+                }
+
+                attributes.push_back({ .kind = AST::AttributeKind::eShader, .shader_kind = shader_kind });
+
+                self.expect(self.next(), TokenKind::eParenRight);
+            } break;
+            case TokenKind::eThreads: {
+            } break;
+            default: {
+                throw ParserUnexpectedTokenError(attrib_token.location);
+            }
+        }
+
+        is_first = false;
+    }
+
+    self.expect(self.next(), TokenKind::eSquareRight);
+
+    return attributes;
+}
+
 auto Parser::parse_statement(this Parser &self, bool root) -> AST::NodeID {
     if (self.peek().is(TokenKind::eBraceLeft) && !root) {
         return self.parse_multi_statement();
@@ -267,50 +325,57 @@ auto Parser::parse_multi_statement(this Parser &self) -> AST::NodeID {
 }
 
 auto Parser::parse_single_statement(this Parser &self) -> AST::NodeID {
-    const auto &token = self.peek();
-    switch (token.kind) {
-        case TokenKind::eEof: {
-            return AST::NodeID::Invalid;
-        }
-        case TokenKind::eFn: {
-            return self.parse_function_decl_statement();
-        }
-        case TokenKind::eLet: {
-            return self.parse_variable_decl_statement();
-        }
-        case TokenKind::eReturn: {
-            return self.parse_return_statement();
-        }
-        case TokenKind::eIdentifier: {
-            return self.parse_expression_statement();
-        }
-        case TokenKind::eWhile: {
-            return self.parse_while_statement();
-        }
-        case TokenKind::eIf: {
-            return self.parse_branch_statement();
-        }
-        case TokenKind::eMatch: {
-            return self.parse_multiway_branch_statement();
-        }
-        case TokenKind::eBreak: {
-            self.next();
-            self.expect(self.next(), TokenKind::eSemiColon);
+    auto attributes = std::vector<AST::Attribute>();
+    while (true) {
+        const auto &token = self.peek();
+        switch (token.kind) {
+            case TokenKind::eEof: {
+                return AST::NodeID::Invalid;
+            }
+            case TokenKind::eFn: {
+                return self.parse_function_decl_statement(std::move(attributes));
+            }
+            case TokenKind::eLet: {
+                return self.parse_variable_decl_statement();
+            }
+            case TokenKind::eReturn: {
+                return self.parse_return_statement();
+            }
+            case TokenKind::eIdentifier: {
+                return self.parse_expression_statement();
+            }
+            case TokenKind::eWhile: {
+                return self.parse_while_statement();
+            }
+            case TokenKind::eIf: {
+                return self.parse_branch_statement();
+            }
+            case TokenKind::eMatch: {
+                return self.parse_multiway_branch_statement();
+            }
+            case TokenKind::eBreak: {
+                self.next();
+                self.expect(self.next(), TokenKind::eSemiColon);
 
-            return self.make_node({ .break_statement = {} });
-        }
-        case TokenKind::eContinue: {
-            self.next();
-            self.expect(self.next(), TokenKind::eSemiColon);
+                return self.make_node({ .break_statement = {} });
+            }
+            case TokenKind::eContinue: {
+                self.next();
+                self.expect(self.next(), TokenKind::eSemiColon);
 
-            return self.make_node({ .continue_statement = {} });
+                return self.make_node({ .continue_statement = {} });
+            }
+            case TokenKind::eHash: {
+                attributes = self.parse_attributes();
+                continue;
+            }
+            default: {
+                throw ParserUnexpectedTokenError(token.location);
+            }
         }
-        default: {
-            throw ParserUnexpectedTokenError(token.location);
-        }
+
+        return AST::NodeID::Invalid;
     }
-
-    return AST::NodeID::Invalid;
 }
 
 auto Parser::parse_variable_decl_statement(this Parser &self) -> AST::NodeID {
@@ -343,7 +408,7 @@ auto Parser::parse_variable_decl_statement(this Parser &self) -> AST::NodeID {
     return self.make_node({ .decl_var_statement = decl_var_statement });
 }
 
-auto Parser::parse_function_decl_statement(this Parser &self) -> AST::NodeID {
+auto Parser::parse_function_decl_statement(this Parser &self, std::vector<AST::Attribute> attributes) -> AST::NodeID {
     self.expect(self.next(), TokenKind::eFn);
 
     auto identifier_str = self.parse_identifier_str();
@@ -387,6 +452,7 @@ auto Parser::parse_function_decl_statement(this Parser &self) -> AST::NodeID {
     decl_function_statement.parameters = self.allocator->copy_into(Span(params));
     decl_function_statement.return_value_kind = return_type_kind;
     decl_function_statement.body_statement_id = body_statement;
+    decl_function_statement.attributes = self.allocator->copy_into(Span(attributes));
 
     return self.make_node({ .decl_function_statement = decl_function_statement });
 }
@@ -605,13 +671,13 @@ auto Parser::parse_primary_expression(this Parser &self) -> AST::NodeID {
 auto Parser::parse_expression_list(this Parser &self, TokenKind terminator) -> std::vector<AST::NodeID> {
     auto expressions = std::vector<AST::NodeID>();
 
-    auto first = true;
+    auto is_first = true;
     while (!self.peek().is(terminator)) {
-        if (!first) {
+        if (!is_first) {
             self.expect(self.next(), TokenKind::eComma);
         }
 
-        first = false;
+        is_first = false;
         expressions.push_back(self.parse_expression(AST::Precedence::eAssignment));
     }
 
@@ -642,7 +708,7 @@ auto Parser::parse_const_value_expression(this Parser &self) -> AST::NodeID {
             auto token_str = token.string(self.source);
             auto expr_str = self.allocator->alloc_str(token_str);
             expr_value.kind = AST::ExpressionValueKind::eString;
-            expr_value.element_count = token.string_length;
+            expr_value.element_count = token.string_value.length;
             expr_value.str_val = expr_str.data();
         } break;
         case TokenKind::eIntegerLiteral: {

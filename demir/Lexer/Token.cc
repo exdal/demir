@@ -7,12 +7,14 @@
 namespace demir {
 constexpr static std::string_view TOKEN_KIND_STR[] = {
 #define KEYWORD(name, str) str,
+#define ATTRIBUTE(name, str) str,
 #define PUNCTUATOR(name, str) str,
 #define PREPROCESSOR(name) "",
 #define LITERAL(name) "",
 #define MISC(name) "",
 #include "demir/Lexer/Tokens.hh"
 #undef KEYWORD
+#undef ATTRIBUTE
 #undef PUNCTUATOR
 #undef PREPROCESSOR
 #undef LITERAL

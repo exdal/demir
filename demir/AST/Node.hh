@@ -1,6 +1,8 @@
 #pragma once
 
 #include "demir/AST/ExpressionType.hh"
+#include "demir/AST/Attribute.hh"
+
 #include "demir/Core/Span.hh"
 #include "demir/Core/Types.hh"
 
@@ -143,6 +145,7 @@ struct DeclareFunctionStatement {
 
     NodeKind kind = NodeKind::eDeclareFunctionStatement;
 
+    Span<Attribute> attributes = {};
     std::string_view identifier_str = {};
     Span<Parameter> parameters = {};
     ExpressionValueKind return_value_kind = ExpressionValueKind::eNone;

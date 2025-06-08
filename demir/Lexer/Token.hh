@@ -22,13 +22,16 @@ auto token_kind_keyword_strings() -> Span<const std::string_view>;
 struct Token {
     TokenKind kind = TokenKind::eEof;
     Location location = {};
+
+    struct StringValue {
+        u32 offset;
+        u32 length;
+    };
+
     union {
         u64 integer_value = ~0_u64;
         f64 float_value;
-        struct {
-            u32 string_offset;
-            u32 string_length;
-        };
+        StringValue string_value;
     };
 
     Token() = default;
@@ -37,8 +40,7 @@ struct Token {
     Token(TokenKind kind_, const Location &location_, u32 string_offset_, u32 string_length_) :
         kind(kind_),
         location(location_),
-        string_offset(string_offset_),
-        string_length(string_length_) {}
+        string_value(string_offset_, string_length_) {}
 
     auto is(TokenKind k) const -> bool {
         return kind == k;
@@ -53,7 +55,7 @@ struct Token {
     }
 
     auto has_string() const -> bool {
-        return string_offset != ~0_u32 && string_length != ~0_u32;
+        return string_value.offset != ~0_u32 && string_value.length != ~0_u32;
     }
 
     auto kind_str() const -> std::string_view {
@@ -66,7 +68,7 @@ struct Token {
 
     auto string(std::string_view source) const -> std::string_view {
         DEMIR_EXPECT(has_string());
-        return std::string_view(source.cbegin() + string_offset, string_length);
+        return std::string_view(source.cbegin() + string_value.offset, string_value.length);
     }
 };
 } // namespace demir

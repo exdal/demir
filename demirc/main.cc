@@ -7,6 +7,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <ranges>
 #include <utility>
 
 #include <fmt/core.h>
@@ -456,10 +457,8 @@ int main(int, char *[]) {
         node_id++;
     }
 
-    u32 func_id = 0;
-    for (const auto &func : functions) {
+    for (const auto &[func, func_id] : std::views::zip(functions, std::views::iota(0_sz))) {
         fmt::println("func_{}:", func_id);
-        func_id++;
 
         for (auto block_id : func.basic_block_node_ids) {
             fmt::println(" block_%{}:", std::to_underlying(block_id));
