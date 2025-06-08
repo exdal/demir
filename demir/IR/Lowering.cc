@@ -508,7 +508,14 @@ auto Builder::end_function(this Builder &self, NodeID func_node_id) -> void {
 }
 
 auto Builder::lower_decl_variable_statement(this Builder &self, AST::DeclareVarStatement &statement) -> NodeID {
-    auto type_node_id = self.lower_type(statement.value_kind);
+    auto type_node_id = NodeID::Invalid;
+    if (statement.value_kind != AST::ExpressionValueKind::eNone) {
+        type_node_id = self.lower_type(statement.value_kind);
+    } else{
+        // Implicit case, default to i32
+        type_node_id = self.lower_type(AST::ExpressionValueKind::ei32);
+    }
+
     auto variable = Variable{
         .type_node_id = type_node_id,
     };
