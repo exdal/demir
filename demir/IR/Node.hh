@@ -21,6 +21,7 @@ enum class InstructionKind : u32 {
     // Control Flow instructions
     eReturn, // terminating
     eKill, // terminating
+    eSelectionMerge, // routing the flow after a branch
     eBranch, // terminating
     eConditionalBranch, // terminating
     eMultiwayBranch, // terminating
@@ -65,6 +66,10 @@ struct ReturnInstruction : InstructionHeader<InstructionKind::eReturn> {
 // Terminating instruction, must be at the end of the block.
 struct KillInstruction : InstructionHeader<InstructionKind::eKill> {};
 
+struct SelectionMerge : InstructionHeader<InstructionKind::eSelectionMerge> {
+    NodeID dst_block_node_id = NodeID::Invalid;
+};
+
 // Terminating instruction, must be at the end of the block.
 struct BranchInstruction : InstructionHeader<InstructionKind::eBranch> {
     NodeID next_block_node_id = NodeID::Invalid;
@@ -79,6 +84,7 @@ struct ConditionalBranchInstruction : InstructionHeader<InstructionKind::eCondit
 
     Span<Condition> conditions = {};
     NodeID false_block_node_id = NodeID::Invalid;
+    NodeID exiting_block_node_id = NodeID::Invalid;
 };
 
 // Terminating instruction, must be at the end of the block.
@@ -89,7 +95,7 @@ struct MultiwayInstruction : InstructionHeader<InstructionKind::eMultiwayBranch>
     };
 
     NodeID selector_node_id = NodeID::Invalid;
-    NodeID default_block_id = NodeID::Invalid;
+    NodeID default_block_node_id = NodeID::Invalid;
     Span<Branch> branches = {};
 };
 
@@ -121,11 +127,13 @@ struct FunctionCallInstruction : InstructionHeader<InstructionKind::eFunctionCal
     Span<NodeID> param_node_ids = {};
 };
 
+// TODO: Clean up this shit
 union Instruction {
     InstructionHeader<InstructionKind::eNoOp> header = {};
 
     ReturnInstruction return_instr;
     KillInstruction kill_instr;
+    SelectionMerge selection_merge_instr;
     BranchInstruction branch_instr;
     ConditionalBranchInstruction conditional_branch_instr;
     MultiwayInstruction multiway_branch_instr;

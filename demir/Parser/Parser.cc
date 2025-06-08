@@ -9,60 +9,47 @@
 
 namespace demir {
 auto token_kind_to_precedence(TokenKind kind) -> AST::Precedence {
-    auto prec = AST::Precedence::eInvalid;
     switch (kind) {
-        case TokenKind::eComma: {
-            prec = AST::Precedence::eComma;
-        } break;
+        case TokenKind::eComma:
+            return AST::Precedence::eComma;
         case TokenKind::eEqual:
         case TokenKind::eAddEqual:
         case TokenKind::eSubEqual:
         case TokenKind::eMulEqual:
-        case TokenKind::eDivEqual: {
-            prec = AST::Precedence::eAssignment;
-        } break;
+        case TokenKind::eDivEqual:
+            return AST::Precedence::eAssignment;
         case TokenKind::eRange:
-        case TokenKind::eRangeEqual: {
-            prec = AST::Precedence::eRange;
-        } break;
-        case TokenKind::eLogicalOr: {
-            prec = AST::Precedence::eLogicalOr;
-        } break;
-        case TokenKind::eLogicalAnd: {
-            prec = AST::Precedence::eLogicalAnd;
-        } break;
-        case TokenKind::eBitOr: {
-            prec = AST::Precedence::eBitOr;
-        } break;
-        case TokenKind::eBitAnd: {
-            prec = AST::Precedence::eBitAnd;
-        } break;
+        case TokenKind::eRangeEqual:
+            return AST::Precedence::eRange;
+        case TokenKind::eLogicalOr:
+            return AST::Precedence::eLogicalOr;
+        case TokenKind::eLogicalAnd:
+            return AST::Precedence::eLogicalAnd;
+        case TokenKind::eBitOr:
+            return AST::Precedence::eBitOr;
+        case TokenKind::eBitAnd:
+            return AST::Precedence::eBitAnd;
         case TokenKind::eCompareEqual:
-        case TokenKind::eCompareNotEqual: {
-            prec = AST::Precedence::eCompareEqual;
-        } break;
+        case TokenKind::eCompareNotEqual:
+            return AST::Precedence::eCompareEqual;
         case TokenKind::eAngleLeft:
         case TokenKind::eAngleRight:
         case TokenKind::eGreaterEqual:
-        case TokenKind::eLessEqual: {
-            prec = AST::Precedence::eCompareRelational;
-        } break;
+        case TokenKind::eLessEqual:
+            return AST::Precedence::eCompareRelational;
         case TokenKind::eShiftLeft:
-        case TokenKind::eShiftRight: {
-            prec = AST::Precedence::eBitShift;
-        } break;
+        case TokenKind::eShiftRight:
+            return AST::Precedence::eBitShift;
         case TokenKind::eAdd:
-        case TokenKind::eSub: {
-            prec = AST::Precedence::eAdditive;
-        } break;
+        case TokenKind::eSub:
+            return AST::Precedence::eAdditive;
         case TokenKind::eMul:
-        case TokenKind::eDiv: {
-            prec = AST::Precedence::eMultiplicative;
-        } break;
+        case TokenKind::eDiv:
+            return AST::Precedence::eMultiplicative;
         default:;
     }
 
-    return prec;
+    return AST::Precedence::eInvalid;
 }
 
 auto token_kind_to_binary_op(TokenKind kind) -> Option<AST::BinaryOp> {

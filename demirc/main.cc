@@ -146,6 +146,8 @@ auto instruction_kind_to_str(demir::IR::InstructionKind kind) -> std::string_vie
             return "OpLessThan";
         case demir::IR::InstructionKind::eLessThanEqual:
             return "OpLessThanEqual";
+        case demir::IR::InstructionKind::eSelectionMerge:
+            return "OpSelectionMerge";
     }
 }
 
@@ -505,6 +507,10 @@ int main(int, char *[]) {
                             std::to_underlying(alu_instr.lhs_node_id),
                             std::to_underlying(alu_instr.rhs_node_id)
                         );
+                    } break;
+                    case demir::IR::InstructionKind::eSelectionMerge: {
+                        auto &selection_merge_instr = instr.selection_merge_instr;
+                        fmt::println("[dst block: {}]", std::to_underlying(selection_merge_instr.dst_block_node_id));
                     } break;
                     case demir::IR::InstructionKind::eMultiwayBranch:
                     case demir::IR::InstructionKind::eFunctionCall: {

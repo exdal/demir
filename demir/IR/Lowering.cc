@@ -51,6 +51,7 @@ struct BuilderVisitor : AST::Visitor {
     auto visit(AST::ReturnStatement &statement) -> void override {
         builder->ensure_block();
         builder->lower_return_statement(statement);
+        builder->set_active_basic_block(NodeID::Invalid);
     }
 
     auto visit(AST::ExpressionStatement &statement) -> void override {
@@ -62,7 +63,8 @@ struct BuilderVisitor : AST::Visitor {
     auto visit(AST::BranchStatement &statement) -> void override {
         auto conditional_branch_instr_node_id = builder->lower_branch_statement(statement);
         auto *node = builder->get_node(conditional_branch_instr_node_id);
-        auto &conditional_branch_instr = node->instruction.conditional_branch_instr;
+        // intentional copy to prevent iterator invaldiation
+        auto conditional_branch_instr = node->instruction.conditional_branch_instr;
 
         for (const auto &[statement_cond, instr_cond] : std::views::zip(statement.conditions, conditional_branch_instr.conditions)) {
             builder->symbol_map.push_scope();
@@ -79,6 +81,9 @@ struct BuilderVisitor : AST::Visitor {
             builder->set_active_basic_block(NodeID::Invalid);
             builder->symbol_map.pop_scope();
         }
+
+        // continue block
+        builder->set_active_basic_block(conditional_branch_instr.exiting_block_node_id);
     }
 
     auto visit(AST::MultiwayBranchStatement &) -> void override {}
@@ -139,15 +144,8 @@ auto Builder::active_block(this Builder &self) -> BasicBlock * {
     return &node.basic_block;
 }
 
-auto Builder::ensure_block(this Builder &self) -> NodeID {
-    if (self.active_basic_block_node_id == NodeID::Invalid) {
-        auto new_block_node_id = self.make_node({ .basic_block = {} });
-        self.set_active_basic_block(new_block_node_id);
-
-        return new_block_node_id;
-    }
-
-    return self.active_basic_block_node_id;
+auto Builder::ensure_block(this Builder &self) -> void {
+    DEMIR_EXPECT(self.active_basic_block_node_id != NodeID::Invalid);
 }
 
 auto Builder::lower_type(this Builder &self, const Type &type) -> NodeID {
@@ -529,10 +527,13 @@ auto Builder::lower_branch_statement(this Builder &self, AST::BranchStatement &s
         false_case_block_node_id = self.make_node({ .basic_block = {} });
     }
 
+    auto exiting_block_node_id = self.make_node({ .basic_block = {} });
+    self.make_instr({ .selection_merge_instr = { .dst_block_node_id = exiting_block_node_id } });
+
     auto conditional_branch_instr = ConditionalBranchInstruction{};
     conditional_branch_instr.conditions = self.allocator->copy_into(Span(condition_block_ids));
     conditional_branch_instr.false_block_node_id = false_case_block_node_id;
-
+    conditional_branch_instr.exiting_block_node_id = exiting_block_node_id;
     return self.make_instr({ .conditional_branch_instr = conditional_branch_instr });
 }
 
