@@ -89,7 +89,7 @@ auto Lexer::read_number(this Lexer &self) -> Token {
 
     // TODO: Handle 1eX values
     auto number_str = std::string_view(self.buffer_view.data() + start_off, self.offset - start_off);
-    u64 number_value = 0;
+    i64 number_value = 0;
     auto r = std::from_chars(number_str.begin(), number_str.end(), number_value);
     if (r.ptr != number_str.end() || r.ec != std::errc{}) {
         throw LexerBadNumberError(Location(start_pos, self.position()));
@@ -166,7 +166,6 @@ auto Lexer::read_quoted_string(this Lexer &self) -> Token {
         }
     }
 
-_quoted_str_break:
     self.consume();
     return Token(kind, Location(start_pos, self.position()), start_off, self.offset - start_off - 1);
 }
@@ -252,6 +251,10 @@ auto Lexer::next_token(this Lexer &self) -> Token {
             return Token(TokenKind::eComma, cur_loc);
         }
         case '-': {
+            if (is_digit(self.peek(1))) {
+                return self.read_number();
+            }
+
             self.consume();
             switch (self.peek()) {
                 case '>': {

@@ -175,6 +175,13 @@ struct Constant {
     NodeID type_node_id = NodeID::Invalid;
     union {
         u64 u64_value = 0;
+        i64 i64_value;
+        u32 u32_value;
+        i32 i32_value;
+        u16 u16_value;
+        i16 i16_value;
+        u8 u8_value;
+        i8 i8_value;
         f64 f64_value;
         bool bool_value;
     };

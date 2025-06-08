@@ -102,7 +102,7 @@ auto expression_value_kind_to_str(demir::AST::ExpressionValueKind value_kind) ->
         case demir::AST::ExpressionValueKind::eString:
             return "string";
         default:
-            return "Unhandled";
+            return "i32 (implicitly)";
     }
 }
 
@@ -422,7 +422,35 @@ int main(int, char *[]) {
 
         if (node.kind == IR::NodeKind::eConstant) {
             auto &constant = node.constant;
-            fmt::println("  %{:<2} = OpConstant [type: %{}] [value: {}]", node_id, std::to_underlying(constant.type_node_id), constant.u64_value);
+            auto *type_node = ir_module.get_node(constant.type_node_id);
+            auto &type = type_node->type;
+            auto value_str = std::string{};
+            switch (type.type_kind) {
+                case demir::IR::TypeKind::eInt: {
+                    switch (type.width) {
+                        case 8: {
+                            value_str = std::to_string(type.is_signed ? constant.i8_value : constant.u8_value);
+                        } break;
+                        case 16: {
+                            value_str = std::to_string(type.is_signed ? constant.i16_value : constant.u16_value);
+                        } break;
+                        case 32: {
+                            value_str = std::to_string(type.is_signed ? constant.i32_value : constant.u32_value);
+                        } break;
+                        case 64: {
+                            value_str = std::to_string(type.is_signed ? constant.i64_value : constant.u64_value);
+                        } break;
+                        default:;
+                    }
+                } break;
+                case demir::IR::TypeKind::eFloat: {
+                } break;
+                default: {
+                    value_str = "0";
+                } break;
+            }
+
+            fmt::println("  %{:<2} = OpConstant [type: %{}] [value: {}]", node_id, std::to_underlying(constant.type_node_id), value_str);
         }
 
         node_id++;
