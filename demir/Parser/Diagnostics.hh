@@ -17,6 +17,7 @@ public:
 };
 
 DEMIR_ERROR(Parser, UnexpectedToken, "unexpected token");
+DEMIR_ERROR(Parser, UnexpectedAttribute, "unexpected attribute '{}'", std::string_view);
 
 } // namespace demir
 

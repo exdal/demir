@@ -122,6 +122,19 @@ auto token_kind_to_assignment_type(TokenKind kind) -> Option<AST::AssignmentType
     return nullopt;
 }
 
+auto attribute_kind_to_string(AST::AttributeKind kind) -> std::string_view {
+    switch (kind) {
+        case AST::AttributeKind::eNone:
+            return "None";
+        case AST::AttributeKind::eShader:
+            return "shader";
+        case AST::AttributeKind::eBuiltin:
+            return "builtin";
+        case AST::AttributeKind::eThreads:
+            return "threads";
+    }
+}
+
 auto Parser::parse(BumpAllocator *allocator, std::string_view source) -> ParserResult {
     auto tokens = Lexer::tokenize(source);
     auto parser = Parser{};
@@ -282,7 +295,7 @@ auto Parser::parse_attributes(this Parser &self) -> std::vector<AST::Attribute> 
                     }
                 }
 
-                attributes.push_back({ .kind = AST::AttributeKind::eBuiltin, .builtin_kind = builtin_kind });
+                attributes.push_back({ .kind = AST::AttributeKind::eBuiltin, .location = attrib_token.location, .builtin_kind = builtin_kind });
 
                 self.expect(self.next(), TokenKind::eParenRight);
             } break;
@@ -303,11 +316,11 @@ auto Parser::parse_attributes(this Parser &self) -> std::vector<AST::Attribute> 
                         shader_kind = AST::ShaderKind::eCompute;
                     } break;
                     default: {
-                        throw ParserUnexpectedTokenError(string_token.location);
+                        throw ParserUnexpectedAttributeError(string_token.location, shader_kind_str);
                     }
                 }
 
-                attributes.push_back({ .kind = AST::AttributeKind::eShader, .shader_kind = shader_kind });
+                attributes.push_back({ .kind = AST::AttributeKind::eShader, .location = attrib_token.location, .shader_kind = shader_kind });
 
                 self.expect(self.next(), TokenKind::eParenRight);
             } break;
@@ -442,11 +455,21 @@ auto Parser::parse_variable_decl_statement(this Parser &self) -> AST::NodeID {
     return self.make_node({ .decl_var_statement = decl_var_statement });
 }
 
-auto Parser::parse_function_decl_statement(this Parser &self, std::vector<AST::Attribute> attributes) -> AST::NodeID {
+auto Parser::parse_function_decl_statement(this Parser &self, std::vector<AST::Attribute> &&attributes) -> AST::NodeID {
+    auto shader_kind = AST::ShaderKind::eNone;
+    for (const auto &attribute : attributes) {
+        switch (attribute.kind) {
+            case AST::AttributeKind::eShader: {
+                shader_kind = attribute.shader_kind;
+            } break;
+            default: {
+                throw ParserUnexpectedAttributeError(attribute.location, attribute_kind_to_string(attribute.kind));
+            }
+        }
+    }
+
     self.expect(self.next(), TokenKind::eFn);
-
     auto identifier_str = self.parse_identifier_str();
-
     self.expect(self.next(), TokenKind::eParenLeft);
 
     auto params = std::vector<AST::DeclareFunctionStatement::Parameter>();
@@ -486,7 +509,7 @@ auto Parser::parse_function_decl_statement(this Parser &self, std::vector<AST::A
     decl_function_statement.parameters = self.allocator->copy_into(Span(params));
     decl_function_statement.return_value_kind = return_type_kind;
     decl_function_statement.body_statement_id = body_statement;
-    decl_function_statement.attributes = self.allocator->copy_into(Span(attributes));
+    decl_function_statement.shader_kind = shader_kind;
 
     return self.make_node({ .decl_function_statement = decl_function_statement });
 }

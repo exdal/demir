@@ -1,6 +1,7 @@
 #pragma once
 
 #include "demir/Core/Types.hh"
+#include "demir/demir.hh"
 
 namespace demir::AST {
 enum class AttributeKind : u32 {
@@ -18,7 +19,8 @@ enum class ShaderKind : u32 {
 };
 
 enum class BuiltinKind : u32 {
-    ePrimitiveIndex = 0,
+    eNone,
+    ePrimitiveIndex,
     eInstanceIndex,
     eVertexIndex,
     eGlobalInvocationID,
@@ -29,6 +31,7 @@ enum class BuiltinKind : u32 {
 
 struct Attribute {
     AttributeKind kind = AttributeKind::eNone;
+    Location location = {};
     union {
         ShaderKind shader_kind = ShaderKind::eNone;
         BuiltinKind builtin_kind;

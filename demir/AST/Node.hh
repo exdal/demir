@@ -145,7 +145,7 @@ struct DeclareFunctionStatement {
 
     NodeKind kind = NodeKind::eDeclareFunctionStatement;
 
-    Span<Attribute> attributes = {};
+    ShaderKind shader_kind = ShaderKind::eNone;
     std::string_view identifier_str = {};
     Span<Parameter> parameters = {};
     ExpressionValueKind return_value_kind = ExpressionValueKind::eNone;

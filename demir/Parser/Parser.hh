@@ -38,7 +38,7 @@ private:
     auto parse_multi_statement(this Parser &) -> AST::NodeID;
     auto parse_single_statement(this Parser &) -> AST::NodeID;
     auto parse_variable_decl_statement(this Parser &) -> AST::NodeID;
-    auto parse_function_decl_statement(this Parser &, std::vector<AST::Attribute> attributes = {}) -> AST::NodeID;
+    auto parse_function_decl_statement(this Parser &, std::vector<AST::Attribute> &&attributes = {}) -> AST::NodeID;
     auto parse_return_statement(this Parser &) -> AST::NodeID;
     auto parse_expression_statement(this Parser &) -> AST::NodeID;
     auto parse_while_statement(this Parser &) -> AST::NodeID;
