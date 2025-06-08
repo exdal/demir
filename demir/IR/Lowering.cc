@@ -50,7 +50,8 @@ struct BuilderVisitor : AST::Visitor {
 
     auto visit(AST::ReturnStatement &statement) -> void override {
         builder->ensure_block();
-        builder->lower_return_statement(statement);
+        auto return_instr_id = builder->lower_return_statement(statement);
+        builder->active_block()->terminator_node_id = return_instr_id;
         builder->set_active_basic_block(NodeID::Invalid);
     }
 
@@ -63,27 +64,35 @@ struct BuilderVisitor : AST::Visitor {
     auto visit(AST::BranchStatement &statement) -> void override {
         auto conditional_branch_instr_node_id = builder->lower_branch_statement(statement);
         auto *node = builder->get_node(conditional_branch_instr_node_id);
-        // intentional copy to prevent iterator invaldiation
-        auto conditional_branch_instr = node->instruction.conditional_branch_instr;
+        auto &conditional_branch_instr = node->instruction.conditional_branch_instr;
+        auto lowered_conditions = conditional_branch_instr.conditions;
+        auto false_cond_node_id = conditional_branch_instr.false_block_node_id;
+        auto exiting_block_node_id = conditional_branch_instr.exiting_block_node_id;
 
-        for (const auto &[statement_cond, instr_cond] : std::views::zip(statement.conditions, conditional_branch_instr.conditions)) {
+        for (const auto &[statement_cond, instr_cond] : std::views::zip(statement.conditions, lowered_conditions)) {
             builder->symbol_map.push_scope();
             builder->set_active_basic_block(instr_cond.true_block_node_id);
             visit(statement_cond.true_case_statement_id);
+
+            auto *active_block = builder->active_block();
+            if (active_block->terminator_node_id == NodeID::Invalid) {
+                builder->make_instr({ .branch_instr = { .next_block_node_id = exiting_block_node_id } });
+            }
+
             builder->set_active_basic_block(NodeID::Invalid);
             builder->symbol_map.pop_scope();
         }
 
         if (statement.false_case_statement_id != AST::NodeID::Invalid) {
             builder->symbol_map.push_scope();
-            builder->set_active_basic_block(conditional_branch_instr.false_block_node_id);
+            builder->set_active_basic_block(false_cond_node_id);
             visit(statement.false_case_statement_id);
             builder->set_active_basic_block(NodeID::Invalid);
             builder->symbol_map.pop_scope();
         }
 
         // continue block
-        builder->set_active_basic_block(conditional_branch_instr.exiting_block_node_id);
+        builder->set_active_basic_block(exiting_block_node_id);
     }
 
     auto visit(AST::MultiwayBranchStatement &) -> void override {}
@@ -470,6 +479,21 @@ auto Builder::begin_function(this Builder &self, [[maybe_unused]] NodeID func_no
 }
 
 auto Builder::end_function(this Builder &self, NodeID func_node_id) -> void {
+    // handle implicit return
+    auto *active_block = self.active_block();
+    if (active_block->terminator_node_id == NodeID::Invalid) {
+        auto void_type_id = self.lower_type(Type{ .type_kind = TypeKind::eVoid });
+
+        // TODO: Error handling
+        auto *lowered_node = self.get_node(func_node_id);
+        auto &lowered_func = lowered_node->function;
+        // implicit returns are only okay when function return type is void
+        DEMIR_EXPECT(lowered_func.return_type_node_id == void_type_id);
+        lowered_node = nullptr; // invalidate ptr to prevent future usage of this
+
+        active_block->terminator_node_id = self.make_instr({ .return_instr = { .returning_node_id = void_type_id } });
+    }
+
     self.set_active_basic_block(NodeID::Invalid);
     self.symbol_map.pop_scope();
 

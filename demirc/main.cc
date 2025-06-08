@@ -460,7 +460,7 @@ int main(int, char *[]) {
                     } break;
                     case demir::IR::InstructionKind::eBranch: {
                         auto &branch_instr = instr.branch_instr;
-                        fmt::println("[branch: %{}]", std::to_underlying(branch_instr.node_kind));
+                        fmt::println("[branch: %{}]", std::to_underlying(branch_instr.next_block_node_id));
                     } break;
                     case demir::IR::InstructionKind::eConditionalBranch: {
                         auto &cond_branch_instr = instr.conditional_branch_instr;
@@ -510,7 +510,7 @@ int main(int, char *[]) {
                     } break;
                     case demir::IR::InstructionKind::eSelectionMerge: {
                         auto &selection_merge_instr = instr.selection_merge_instr;
-                        fmt::println("[dst block: {}]", std::to_underlying(selection_merge_instr.dst_block_node_id));
+                        fmt::println("[dst block: %{}]", std::to_underlying(selection_merge_instr.dst_block_node_id));
                     } break;
                     case demir::IR::InstructionKind::eMultiwayBranch:
                     case demir::IR::InstructionKind::eFunctionCall: {
