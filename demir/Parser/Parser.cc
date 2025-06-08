@@ -251,13 +251,47 @@ auto Parser::parse_attributes(this Parser &self) -> std::vector<AST::Attribute> 
         self.next();
         switch (attrib_token.kind) {
             case TokenKind::eBuiltin: {
+                self.expect(self.next(), TokenKind::eParenLeft);
+                const auto &string_token = self.expect(self.next(), TokenKind::eStringLiteral);
+                auto builtin_kind_str = string_token.string(self.source);
+                auto builtin_kind = AST::BuiltinKind::eVertexIndex;
+                switch (fnv64(builtin_kind_str)) {
+                    case fnv64_c("primitive_index"): {
+                        builtin_kind = AST::BuiltinKind::ePrimitiveIndex;
+                    } break;
+                    case fnv64_c("instance_index"): {
+                        builtin_kind = AST::BuiltinKind::eInstanceIndex;
+                    } break;
+                    case fnv64_c("vertex_index"): {
+                        builtin_kind = AST::BuiltinKind::eVertexIndex;
+                    } break;
+                    case fnv64_c("global_invocation_id"): {
+                        builtin_kind = AST::BuiltinKind::eGlobalInvocationID;
+                    } break;
+                    case fnv64_c("local_invocation_id"): {
+                        builtin_kind = AST::BuiltinKind::eLocalInvocationID;
+                    } break;
+                    case fnv64_c("work_group_id"): {
+                        builtin_kind = AST::BuiltinKind::eWorkGroupID;
+                    } break;
+                    case fnv64_c("local_invocation_index"): {
+                        builtin_kind = AST::BuiltinKind::eLocalInvocationIndex;
+                    } break;
+                    default: {
+                        throw ParserUnexpectedTokenError(string_token.location);
+                    }
+                }
+
+                attributes.push_back({ .kind = AST::AttributeKind::eBuiltin, .builtin_kind = builtin_kind });
+
+                self.expect(self.next(), TokenKind::eParenRight);
             } break;
             case TokenKind::eShader: {
                 self.expect(self.next(), TokenKind::eParenLeft);
                 const auto &string_token = self.expect(self.next(), TokenKind::eStringLiteral);
                 auto shader_kind_str = string_token.string(self.source);
-
                 auto shader_kind = AST::ShaderKind::eNone;
+
                 switch (fnv64(shader_kind_str)) {
                     case fnv64_c("vertex"): {
                         shader_kind = AST::ShaderKind::eVertex;
