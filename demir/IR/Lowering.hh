@@ -19,7 +19,6 @@ struct Builder {
     std::vector<NodeID> unique_constant_node_ids = {};
 
     NodeID active_basic_block_node_id = NodeID::Invalid;
-    std::vector<NodeID> current_function_block_node_ids = {};
     std::vector<NodeID> current_block_variable_node_ids = {};
     std::vector<NodeID> current_block_instr_node_ids = {};
     SymbolMap<std::string_view, NodeID> symbol_map = {};
@@ -55,6 +54,7 @@ struct Builder {
     auto lower_decl_variable_statement(this Builder &, AST::DeclareVarStatement &statement) -> NodeID;
     auto lower_return_statement(this Builder &, AST::ReturnStatement &statement) -> NodeID;
     auto lower_branch_statement(this Builder &, AST::BranchStatement &statement) -> NodeID;
+    auto lower_while_statement(this Builder &, AST::WhileStatement &statement) -> NodeID;
 };
 
 auto lower_ast_module(BumpAllocator *allocator, AST::Module *ast_module) -> Module;

@@ -149,6 +149,8 @@ auto instruction_kind_to_str(demir::IR::InstructionKind kind) -> std::string_vie
             return "OpLessThanEqual";
         case demir::IR::InstructionKind::eSelectionMerge:
             return "OpSelectionMerge";
+        case demir::IR::InstructionKind::eLoopMerge:
+            return "OpLoopMerge";
     }
 }
 
@@ -457,94 +459,113 @@ int main(int, char *[]) {
         node_id++;
     }
 
-    for (const auto &[func, func_id] : std::views::zip(functions, std::views::iota(0_sz))) {
-        fmt::println("func_{}:", func_id);
+    auto visited_blocks = ankerl::unordered_dense::set<IR::NodeID>();
+    auto visit_basic_block = [&](this auto &visitor, IR::NodeID block_id) -> void {
+        if (visited_blocks.find(block_id) != visited_blocks.end()) {
+            return;
+        }
+        visited_blocks.emplace(block_id);
 
-        for (auto block_id : func.basic_block_node_ids) {
-            fmt::println(" block_%{}:", std::to_underlying(block_id));
+        fmt::println("  %{:<2} = OpLabel", std::to_underlying(block_id));
 
-            auto *block_node = ir_module.get_node(block_id);
-            auto &block = block_node->basic_block;
-            for (auto var_id : block.variable_ids) {
-                auto *var_node = ir_module.get_node(var_id);
-                auto &variable = var_node->variable;
-                fmt::println("  %{:<2} = OpVariable [type: %{}]", std::to_underlying(var_id), std::to_underlying(variable.type_node_id));
-            }
+        auto *block_node = ir_module.get_node(block_id);
+        auto &block = block_node->basic_block;
+        for (auto var_id : block.variable_ids) {
+            auto *var_node = ir_module.get_node(var_id);
+            auto &variable = var_node->variable;
+            fmt::println("  %{:<2} = OpVariable [type: %{}]", std::to_underlying(var_id), std::to_underlying(variable.type_node_id));
+        }
 
-            for (auto instr_id : block.instruction_ids) {
-                auto *instr_node = ir_module.get_node(instr_id);
-                auto &instr = instr_node->instruction;
-                fmt::print("  %{:<2} = {} ", std::to_underlying(instr_id), instruction_kind_to_str(instr.header.instr_kind));
+        for (auto instr_id : block.instruction_ids) {
+            auto *instr_node = ir_module.get_node(instr_id);
+            auto &instr = instr_node->instruction;
+            fmt::print("  %{:<2} = {} ", std::to_underlying(instr_id), instruction_kind_to_str(instr.header.instr_kind));
 
-                switch (instr.header.instr_kind) {
-                    case demir::IR::InstructionKind::eNoOp:
-                    case demir::IR::InstructionKind::eKill: {
-                        fmt::println("");
-                    } break;
-                    case demir::IR::InstructionKind::eReturn: {
-                        auto &return_instr = instr.return_instr;
-                        fmt::println("[return: %{}]", std::to_underlying(return_instr.returning_node_id));
-                    } break;
-                    case demir::IR::InstructionKind::eBranch: {
-                        auto &branch_instr = instr.branch_instr;
-                        fmt::println("[branch: %{}]", std::to_underlying(branch_instr.next_block_node_id));
-                    } break;
-                    case demir::IR::InstructionKind::eConditionalBranch: {
-                        auto &cond_branch_instr = instr.conditional_branch_instr;
-                        for (const auto &cond : cond_branch_instr.conditions) {
-                            fmt::print(
-                                "[condition: %{}] [true_branch: %{}] ",
-                                std::to_underlying(cond.condition_node_id),
-                                std::to_underlying(cond.true_block_node_id)
-                            );
-                        }
-
-                        fmt::println("[false_branch: %{}] ", std::to_underlying(cond_branch_instr.false_block_node_id));
-                    } break;
-                    case demir::IR::InstructionKind::eLoad: {
-                        auto &load_instr = instr.load_instr;
-                        fmt::println(
-                            "[type: %{}] [variable: %{}]",
-                            std::to_underlying(load_instr.type_node_id),
-                            std::to_underlying(load_instr.variable_node_id)
+            switch (instr.header.instr_kind) {
+                case demir::IR::InstructionKind::eNoOp:
+                case demir::IR::InstructionKind::eKill: {
+                    fmt::println("");
+                } break;
+                case demir::IR::InstructionKind::eReturn: {
+                    auto &return_instr = instr.return_instr;
+                    fmt::println("[return: %{}]", std::to_underlying(return_instr.returning_node_id));
+                } break;
+                case demir::IR::InstructionKind::eBranch: {
+                    auto &branch_instr = instr.branch_instr;
+                    fmt::println("[branch: %{}]", std::to_underlying(branch_instr.next_block_node_id));
+                    visitor(branch_instr.next_block_node_id);
+                } break;
+                case demir::IR::InstructionKind::eConditionalBranch: {
+                    auto &cond_branch_instr = instr.conditional_branch_instr;
+                    for (const auto &cond : cond_branch_instr.conditions) {
+                        fmt::print(
+                            "[condition: %{}] [true_branch: %{}] ",
+                            std::to_underlying(cond.condition_node_id),
+                            std::to_underlying(cond.true_block_node_id)
                         );
-                    } break;
-                    case demir::IR::InstructionKind::eStore: {
-                        auto &store_instr = instr.store_instr;
-                        fmt::println(
-                            "[dst: %{}] [src: %{}]",
-                            std::to_underlying(store_instr.dst_node_id),
-                            std::to_underlying(store_instr.src_node_id)
-                        );
-                    } break;
+                    }
 
-                    case demir::IR::InstructionKind::eAdd:
-                    case demir::IR::InstructionKind::eSub:
-                    case demir::IR::InstructionKind::eMul:
-                    case demir::IR::InstructionKind::eDiv:
-                    case demir::IR::InstructionKind::eEqual:
-                    case demir::IR::InstructionKind::eNotEqual:
-                    case demir::IR::InstructionKind::eGreaterThan:
-                    case demir::IR::InstructionKind::eGreaterThanEqual:
-                    case demir::IR::InstructionKind::eLessThan:
-                    case demir::IR::InstructionKind::eLessThanEqual: {
-                        auto &alu_instr = instr.add_instr;
-                        fmt::println(//
+                    fmt::println("[false_branch: %{}] ", std::to_underlying(cond_branch_instr.false_block_node_id));
+
+                    for (const auto &cond : cond_branch_instr.conditions) {
+                        visitor(cond.true_block_node_id);
+                    }
+
+                    visitor(cond_branch_instr.false_block_node_id);
+                } break;
+                case demir::IR::InstructionKind::eLoad: {
+                    auto &load_instr = instr.load_instr;
+                    fmt::println(
+                        "[type: %{}] [variable: %{}]",
+                        std::to_underlying(load_instr.type_node_id),
+                        std::to_underlying(load_instr.variable_node_id)
+                    );
+                } break;
+                case demir::IR::InstructionKind::eStore: {
+                    auto &store_instr = instr.store_instr;
+                    fmt::println("[dst: %{}] [src: %{}]", std::to_underlying(store_instr.dst_node_id), std::to_underlying(store_instr.src_node_id));
+                } break;
+
+                case demir::IR::InstructionKind::eAdd:
+                case demir::IR::InstructionKind::eSub:
+                case demir::IR::InstructionKind::eMul:
+                case demir::IR::InstructionKind::eDiv:
+                case demir::IR::InstructionKind::eEqual:
+                case demir::IR::InstructionKind::eNotEqual:
+                case demir::IR::InstructionKind::eGreaterThan:
+                case demir::IR::InstructionKind::eGreaterThanEqual:
+                case demir::IR::InstructionKind::eLessThan:
+                case demir::IR::InstructionKind::eLessThanEqual: {
+                    auto &alu_instr = instr.add_instr;
+                    fmt::println(//
                             "[lhs: %{}] [rhs: %{}]",
                             std::to_underlying(alu_instr.lhs_node_id),
                             std::to_underlying(alu_instr.rhs_node_id)
                         );
-                    } break;
-                    case demir::IR::InstructionKind::eSelectionMerge: {
-                        auto &selection_merge_instr = instr.selection_merge_instr;
-                        fmt::println("[dst block: %{}]", std::to_underlying(selection_merge_instr.dst_block_node_id));
-                    } break;
-                    case demir::IR::InstructionKind::eMultiwayBranch:
-                    case demir::IR::InstructionKind::eFunctionCall: {
-                    } break;
-                }
+                } break;
+                case demir::IR::InstructionKind::eSelectionMerge: {
+                    auto &selection_merge_instr = instr.selection_merge_instr;
+                    fmt::println("[dst block: %{}]", std::to_underlying(selection_merge_instr.dst_block_node_id));
+                } break;
+                case demir::IR::InstructionKind::eLoopMerge: {
+                    auto &loop_merge_instr = instr.loop_merge_instr;
+                    fmt::println(
+                        "[dst block: %{}] [continuing block: %{}]",
+                        std::to_underlying(loop_merge_instr.dst_block_node_id),
+                        std::to_underlying(loop_merge_instr.continuing_block_node_id)
+                    );
+                } break;
+                case demir::IR::InstructionKind::eMultiwayBranch:
+                case demir::IR::InstructionKind::eFunctionCall: {
+                } break;
             }
         }
+    };
+
+    for (const auto &[func, func_id] : std::views::zip(functions, std::views::iota(0_sz))) {
+        fmt::println("func_{}:", func_id);
+
+        visit_basic_block(func.first_basic_block_node_id);
     }
 
     return 0;

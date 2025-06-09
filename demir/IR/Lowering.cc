@@ -59,34 +59,50 @@ struct BuilderVisitor : AST::Visitor {
         visit(statement.expression_id);
     }
 
-    auto visit(AST::WhileStatement &) -> void override {}
+    auto visit(AST::WhileStatement &statement) -> void override {
+        auto node_id = builder->lower_while_statement(statement);
+        auto *node = builder->get_node(node_id);
+
+        // intentional copy
+        auto conditional_branch_instr = node->instruction.conditional_branch_instr;
+        auto &lowered_condition = conditional_branch_instr.conditions[0];
+
+        {
+            builder->symbol_map.push_scope();
+            builder->set_active_basic_block(lowered_condition.true_block_node_id);
+            visit(statement.body_statement_id);
+            builder->terminate_active_block(conditional_branch_instr.exiting_block_node_id);
+            builder->symbol_map.pop_scope();
+        }
+
+        builder->set_active_basic_block(conditional_branch_instr.false_block_node_id);
+    }
 
     auto visit(AST::BranchStatement &statement) -> void override {
         auto conditional_branch_instr_node_id = builder->lower_branch_statement(statement);
         auto *node = builder->get_node(conditional_branch_instr_node_id);
-        auto &conditional_branch_instr = node->instruction.conditional_branch_instr;
-        auto lowered_conditions = conditional_branch_instr.conditions;
-        auto false_cond_node_id = conditional_branch_instr.false_block_node_id;
-        auto exiting_block_node_id = conditional_branch_instr.exiting_block_node_id;
 
-        for (const auto &[statement_cond, instr_cond] : std::views::zip(statement.conditions, lowered_conditions)) {
+        // inentional copy
+        auto conditional_branch_instr = node->instruction.conditional_branch_instr;
+
+        for (const auto &[statement_cond, instr_cond] : std::views::zip(statement.conditions, conditional_branch_instr.conditions)) {
             builder->symbol_map.push_scope();
             builder->set_active_basic_block(instr_cond.true_block_node_id);
             visit(statement_cond.true_case_statement_id);
-            builder->terminate_active_block(exiting_block_node_id);
+            builder->terminate_active_block(conditional_branch_instr.exiting_block_node_id);
             builder->symbol_map.pop_scope();
         }
 
         if (statement.false_case_statement_id != AST::NodeID::Invalid) {
             builder->symbol_map.push_scope();
-            builder->set_active_basic_block(false_cond_node_id);
+            builder->set_active_basic_block(conditional_branch_instr.false_block_node_id);
             visit(statement.false_case_statement_id);
-            builder->terminate_active_block(exiting_block_node_id);
+            builder->terminate_active_block(conditional_branch_instr.exiting_block_node_id);
             builder->symbol_map.pop_scope();
         }
 
         // continue block
-        builder->set_active_basic_block(exiting_block_node_id);
+        builder->set_active_basic_block(conditional_branch_instr.exiting_block_node_id);
     }
 
     auto visit(AST::MultiwayBranchStatement &) -> void override {}
@@ -98,10 +114,6 @@ auto Builder::make_node(const Node &node) -> NodeID {
     auto node_index = this->nodes.size();
     this->nodes.push_back(node);
     auto node_id = static_cast<NodeID>(node_index);
-
-    if (node.kind == NodeKind::eBasicBlock) {
-        this->current_function_block_node_ids.push_back(node_id);
-    }
 
     return node_id;
 }
@@ -373,7 +385,7 @@ auto Builder::lower_constant_expression(this Builder &self, AST::ConstantValueEx
 }
 
 auto Builder::lower_assign_expression(this Builder &self, AST::AssignExpression &expression) -> NodeID {
-    auto lhs_node_id = self.lower_expression(expression.lhs_expression_id);
+    auto lhs_node_id = self.get_expression_node_id(expression.lhs_expression_id);
     auto rhs_node_id = self.lower_expression(expression.rhs_expression_id);
 
     auto resulting_instr = rhs_node_id;
@@ -475,10 +487,14 @@ auto Builder::lower_decl_function_statement(this Builder &self, AST::DeclareFunc
     return func_node_id;
 }
 
-auto Builder::begin_function(this Builder &self, [[maybe_unused]] NodeID func_node_id) -> void {
+auto Builder::begin_function(this Builder &self, NodeID func_node_id) -> void {
+    auto first_basic_block_node_id = self.make_node({ .basic_block = {} });
+    auto *lowered_node = self.get_node(func_node_id);
+    auto &lowered_func = lowered_node->function;
+    lowered_func.first_basic_block_node_id = first_basic_block_node_id;
+
     self.symbol_map.push_scope();
-    auto starter_block_id = self.make_node({ .basic_block = {} });
-    self.set_active_basic_block(starter_block_id);
+    self.set_active_basic_block(first_basic_block_node_id);
 }
 
 auto Builder::end_function(this Builder &self, NodeID func_node_id) -> void {
@@ -499,19 +515,13 @@ auto Builder::end_function(this Builder &self, NodeID func_node_id) -> void {
 
     self.set_active_basic_block(NodeID::Invalid);
     self.symbol_map.pop_scope();
-
-    // NO NODE INSERTIONS PAST THIS FUNCTION
-    auto *lowered_node = self.get_node(func_node_id);
-    auto &lowered_func = lowered_node->function;
-    lowered_func.basic_block_node_ids = self.allocator->copy_into(Span(self.current_function_block_node_ids));
-    self.current_function_block_node_ids.clear();
 }
 
 auto Builder::lower_decl_variable_statement(this Builder &self, AST::DeclareVarStatement &statement) -> NodeID {
     auto type_node_id = NodeID::Invalid;
     if (statement.value_kind != AST::ExpressionValueKind::eNone) {
         type_node_id = self.lower_type(statement.value_kind);
-    } else{
+    } else {
         // Implicit case, default to i32
         type_node_id = self.lower_type(AST::ExpressionValueKind::ei32);
     }
@@ -549,6 +559,8 @@ auto Builder::lower_return_statement(this Builder &self, AST::ReturnStatement &s
 }
 
 auto Builder::lower_branch_statement(this Builder &self, AST::BranchStatement &statement) -> NodeID {
+    auto exiting_block_node_id = self.make_node({ .basic_block = {} });
+
     auto condition_block_ids = std::vector<ConditionalBranchInstruction::Condition>();
     for (const auto &cond : statement.conditions) {
         auto block_node_id = self.make_node({ .basic_block = {} });
@@ -556,19 +568,60 @@ auto Builder::lower_branch_statement(this Builder &self, AST::BranchStatement &s
         condition_block_ids.push_back({ .condition_node_id = condition_instr, .true_block_node_id = block_node_id });
     }
 
-    auto false_case_block_node_id = NodeID::Invalid;
+    auto false_case_block_node_id = exiting_block_node_id;
     if (statement.false_case_statement_id != AST::NodeID::Invalid) {
         false_case_block_node_id = self.make_node({ .basic_block = {} });
     }
 
-    auto exiting_block_node_id = self.make_node({ .basic_block = {} });
     self.make_instr({ .selection_merge_instr = { .dst_block_node_id = exiting_block_node_id } });
 
-    auto conditional_branch_instr = ConditionalBranchInstruction{};
-    conditional_branch_instr.conditions = self.allocator->copy_into(Span(condition_block_ids));
-    conditional_branch_instr.false_block_node_id = false_case_block_node_id;
-    conditional_branch_instr.exiting_block_node_id = exiting_block_node_id;
+    auto conditional_branch_instr = ConditionalBranchInstruction{
+        .conditions = self.allocator->copy_into(Span(condition_block_ids)),
+        .false_block_node_id = false_case_block_node_id,
+        .exiting_block_node_id = exiting_block_node_id,
+    };
     return self.make_instr({ .conditional_branch_instr = conditional_branch_instr });
+}
+
+auto Builder::lower_while_statement(this Builder &self, AST::WhileStatement &statement) -> NodeID {
+    auto exiting_block_node_id = self.make_node({ .basic_block = {} });
+
+    //  ── LOOP HEADER ─────────────────────────────────────────────────────
+    auto continuing_block_node_id = self.make_node({ .basic_block = {} });
+    auto loop_begin_block_node_id = self.make_node({ .basic_block = {} });
+
+    self.terminate_active_block(loop_begin_block_node_id);
+    self.set_active_basic_block(loop_begin_block_node_id);
+    auto loop_merge_instr = LoopMerge{
+        .dst_block_node_id = exiting_block_node_id,
+        .continuing_block_node_id = continuing_block_node_id,
+    };
+    self.make_instr({ .loop_merge_instr = loop_merge_instr });
+
+    //  ── LOOP BODY ───────────────────────────────────────────────────────
+    auto cond_block_id = self.make_node({ .basic_block = {} });
+    self.terminate_active_block(cond_block_id);
+    self.set_active_basic_block(cond_block_id);
+
+    auto body_block_id = self.make_node({ .basic_block = {} });
+    auto condition_node_id = self.lower_expression(statement.condition_expression_id);
+    auto cond = ConditionalBranchInstruction::Condition{
+        .condition_node_id = condition_node_id,
+        .true_block_node_id = body_block_id,
+    };
+
+    auto conditional_branch_instr = ConditionalBranchInstruction{
+        .conditions = self.allocator->copy_into(Span(&cond, 1)),
+        .false_block_node_id = exiting_block_node_id,
+        .exiting_block_node_id = continuing_block_node_id,
+    };
+    auto conditional_branch_instr_node_id = self.make_instr({ .conditional_branch_instr = conditional_branch_instr });
+
+    //  ── LOOP FOOTER ─────────────────────────────────────────────────────
+    self.set_active_basic_block(continuing_block_node_id);
+    self.terminate_active_block(loop_begin_block_node_id);
+
+    return conditional_branch_instr_node_id;
 }
 
 auto lower_ast_module(BumpAllocator *allocator, AST::Module *ast_module) -> Module {

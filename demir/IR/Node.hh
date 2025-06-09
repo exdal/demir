@@ -21,7 +21,8 @@ enum class InstructionKind : u32 {
     // Control Flow instructions
     eReturn, // terminating
     eKill, // terminating
-    eSelectionMerge, // routing the flow after a branch
+    eSelectionMerge, // routing
+    eLoopMerge, // routing
     eBranch, // terminating
     eConditionalBranch, // terminating
     eMultiwayBranch, // terminating
@@ -68,6 +69,11 @@ struct KillInstruction : InstructionHeader<InstructionKind::eKill> {};
 
 struct SelectionMerge : InstructionHeader<InstructionKind::eSelectionMerge> {
     NodeID dst_block_node_id = NodeID::Invalid;
+};
+
+struct LoopMerge : InstructionHeader<InstructionKind::eLoopMerge> {
+    NodeID dst_block_node_id = NodeID::Invalid;
+    NodeID continuing_block_node_id = NodeID::Invalid;
 };
 
 // Terminating instruction, must be at the end of the block.
@@ -134,6 +140,7 @@ union Instruction {
     ReturnInstruction return_instr;
     KillInstruction kill_instr;
     SelectionMerge selection_merge_instr;
+    LoopMerge loop_merge_instr;
     BranchInstruction branch_instr;
     ConditionalBranchInstruction conditional_branch_instr;
     MultiwayInstruction multiway_branch_instr;
@@ -205,8 +212,8 @@ struct Function {
     NodeKind kind = NodeKind::eFunction;
 
     Span<NodeID> parameter_type_node_ids = {};
-    NodeID return_type_node_id = {};
-    Span<NodeID> basic_block_node_ids = {};
+    NodeID return_type_node_id = NodeID::Invalid;
+    NodeID first_basic_block_node_id = NodeID::Invalid;
 };
 
 union Node {
