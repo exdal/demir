@@ -28,4 +28,24 @@ struct Visitor {
     virtual auto visit(BreakStatement &) -> void = 0;
     virtual auto visit(ContinueStatement &) -> void = 0;
 };
+
+struct StatementVisitor {
+    Module *module = nullptr;
+
+    StatementVisitor() = default;
+    StatementVisitor(Module *module_);
+    auto visit(NodeID node_id) -> void;
+
+    virtual auto visit(MultiStatement &) -> void = 0;
+    virtual auto visit(DeclareVarStatement &) -> void = 0;
+    virtual auto visit(DeclareFunctionStatement &) -> void = 0;
+    virtual auto visit(ReturnStatement &) -> void = 0;
+    virtual auto visit(ExpressionStatement &) -> void = 0;
+    virtual auto visit(WhileStatement &) -> void = 0;
+    virtual auto visit(BranchStatement &) -> void = 0;
+    virtual auto visit(MultiwayBranchStatement &) -> void = 0;
+    virtual auto visit(BreakStatement &) -> void = 0;
+    virtual auto visit(ContinueStatement &) -> void = 0;
+};
+
 } // namespace demir::AST

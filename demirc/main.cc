@@ -1,6 +1,6 @@
 #include "demir/AST/Module.hh"
 #include "demir/AST/Visitor.hh"
-#include "demir/IR/Lowering.hh"
+#include "demir/IR/Module.hh"
 #include "demir/Parser/Parser.hh"
 
 #include <demir/demir.hh>
@@ -12,168 +12,180 @@
 
 #include <fmt/core.h>
 
-auto binary_op_to_str(demir::AST::BinaryOp op) -> std::string_view {
+using namespace demir;
+
+auto binary_op_to_str(AST::BinaryOp op) -> std::string_view {
     switch (op) {
-        case demir::AST::BinaryOp::eAdd:
+        case AST::BinaryOp::eAdd:
             return "ADD";
-        case demir::AST::BinaryOp::eSub:
+        case AST::BinaryOp::eSub:
             return "SUB";
-        case demir::AST::BinaryOp::eMul:
+        case AST::BinaryOp::eMul:
             return "MUL";
-        case demir::AST::BinaryOp::eDiv:
+        case AST::BinaryOp::eDiv:
             return "DIV";
-        case demir::AST::BinaryOp::eMod:
+        case AST::BinaryOp::eMod:
             return "MOD";
-        case demir::AST::BinaryOp::eBitAnd:
+        case AST::BinaryOp::eBitAnd:
             return "BIT AND";
-        case demir::AST::BinaryOp::eBitXor:
+        case AST::BinaryOp::eBitXor:
             return "BIT XOR";
-        case demir::AST::BinaryOp::eBitOr:
+        case AST::BinaryOp::eBitOr:
             return "BIT OR";
-        case demir::AST::BinaryOp::eCompGreater:
+        case AST::BinaryOp::eCompGreater:
             return "COMP GREATER";
-        case demir::AST::BinaryOp::eCompLess:
+        case AST::BinaryOp::eCompLess:
             return "COMP LESS";
-        case demir::AST::BinaryOp::eCompEq:
+        case AST::BinaryOp::eCompEq:
             return "COMP EQUAL";
-        case demir::AST::BinaryOp::eCompNotEq:
+        case AST::BinaryOp::eCompNotEq:
             return "COMP NOT EQUAL";
-        case demir::AST::BinaryOp::eCompAnd:
+        case AST::BinaryOp::eCompAnd:
             return "COMP AND";
-        case demir::AST::BinaryOp::eCompOr:
+        case AST::BinaryOp::eCompOr:
             return "COMP OR";
-        case demir::AST::BinaryOp::eCompGreaterEq:
+        case AST::BinaryOp::eCompGreaterEq:
             return "COMP GREATER EQUAL";
-        case demir::AST::BinaryOp::eCompLessEq:
+        case AST::BinaryOp::eCompLessEq:
             return "COMP LESS EQUAL";
-        case demir::AST::BinaryOp::eShiftLeft:
+        case AST::BinaryOp::eShiftLeft:
             return "BIT SHIFT LEFT";
-        case demir::AST::BinaryOp::eShiftRight:
+        case AST::BinaryOp::eShiftRight:
             return "BIT SHIFT RIGHT";
-        case demir::AST::BinaryOp::eRightExclusiveRange:
+        case AST::BinaryOp::eRightExclusiveRange:
             return "RIGHT EXCLUSIVE RANGE";
-        case demir::AST::BinaryOp::eRightInclusiveRange:
+        case AST::BinaryOp::eRightInclusiveRange:
             return "RIGHT INCLUSIVE RANGE";
     }
 
     return "???";
 }
 
-auto assignment_to_str(demir::AST::AssignmentType type) -> std::string_view {
+auto assignment_to_str(AST::AssignmentType type) -> std::string_view {
     switch (type) {
-        case demir::AST::AssignmentType::eAssign:
+        case AST::AssignmentType::eAssign:
             return "SIMPLE";
-        case demir::AST::AssignmentType::eCompoundAdd:
+        case AST::AssignmentType::eCompoundAdd:
             return "COMPOUND ADD";
-        case demir::AST::AssignmentType::eCompoundSub:
+        case AST::AssignmentType::eCompoundSub:
             return "COMPOUND SUB";
-        case demir::AST::AssignmentType::eCompoundMul:
+        case AST::AssignmentType::eCompoundMul:
             return "COMPOUND MUL";
-        case demir::AST::AssignmentType::eCompoundDiv:
+        case AST::AssignmentType::eCompoundDiv:
             return "COMPOUND DIV";
     }
 
     return "???";
 }
 
-auto expression_value_kind_to_str(demir::AST::ExpressionValueKind value_kind) -> std::string_view {
+auto expression_value_kind_to_str(AST::ExpressionValueKind value_kind) -> std::string_view {
     switch (value_kind) {
-        case demir::AST::ExpressionValueKind::eBool:
+        case AST::ExpressionValueKind::eBool:
             return "bool";
-        case demir::AST::ExpressionValueKind::ei8:
+        case AST::ExpressionValueKind::ei8:
             return "i8";
-        case demir::AST::ExpressionValueKind::eu8:
+        case AST::ExpressionValueKind::eu8:
             return "u8";
-        case demir::AST::ExpressionValueKind::ei16:
+        case AST::ExpressionValueKind::ei16:
             return "i16";
-        case demir::AST::ExpressionValueKind::eu16:
+        case AST::ExpressionValueKind::eu16:
             return "u16";
-        case demir::AST::ExpressionValueKind::ei32:
+        case AST::ExpressionValueKind::ei32:
             return "i32";
-        case demir::AST::ExpressionValueKind::eu32:
+        case AST::ExpressionValueKind::eu32:
             return "u32";
-        case demir::AST::ExpressionValueKind::ei64:
+        case AST::ExpressionValueKind::ei64:
             return "i64";
-        case demir::AST::ExpressionValueKind::eu64:
+        case AST::ExpressionValueKind::eu64:
             return "u64";
-        case demir::AST::ExpressionValueKind::ef32:
+        case AST::ExpressionValueKind::ef32:
             return "f32";
-        case demir::AST::ExpressionValueKind::ef64:
+        case AST::ExpressionValueKind::ef64:
             return "f64";
-        case demir::AST::ExpressionValueKind::eString:
+        case AST::ExpressionValueKind::eString:
             return "string";
         default:
             return "i32 (implicitly)";
     }
 }
 
-auto instruction_kind_to_str(demir::IR::InstructionKind kind) -> std::string_view {
+auto instruction_kind_to_str(IR::NodeKind kind) -> std::string_view {
     switch (kind) {
-        case demir::IR::InstructionKind::eNoOp:
+        case IR::NodeKind::eNoOp:
             return "OpNoOp";
-        case demir::IR::InstructionKind::eReturn:
+        case IR::NodeKind::eReturn:
             return "OpReturn";
-        case demir::IR::InstructionKind::eKill:
+        case IR::NodeKind::eKill:
             return "OpKill";
-        case demir::IR::InstructionKind::eBranch:
+        case IR::NodeKind::eBranch:
             return "OpBranch";
-        case demir::IR::InstructionKind::eConditionalBranch:
+        case IR::NodeKind::eConditionalBranch:
             return "OpConditionalBranch";
-        case demir::IR::InstructionKind::eMultiwayBranch:
+        case IR::NodeKind::eMultiwayBranch:
             return "OpMultiwayBranch";
-        case demir::IR::InstructionKind::eLoad:
+        case IR::NodeKind::eLoad:
             return "OpLoad";
-        case demir::IR::InstructionKind::eStore:
+        case IR::NodeKind::eStore:
             return "OpStore";
-        case demir::IR::InstructionKind::eFunctionCall:
+        case IR::NodeKind::eFunctionCall:
             return "OpCallFunction";
-        case demir::IR::InstructionKind::eAdd:
+        case IR::NodeKind::eAdd:
             return "OpAdd";
-        case demir::IR::InstructionKind::eSub:
+        case IR::NodeKind::eSub:
             return "OpSub";
-        case demir::IR::InstructionKind::eMul:
+        case IR::NodeKind::eMul:
             return "OpMul";
-        case demir::IR::InstructionKind::eDiv:
+        case IR::NodeKind::eDiv:
             return "OpDiv";
-        case demir::IR::InstructionKind::eEqual:
+        case IR::NodeKind::eEqual:
             return "OpEqual";
-        case demir::IR::InstructionKind::eNotEqual:
+        case IR::NodeKind::eNotEqual:
             return "OpNotEqual";
-        case demir::IR::InstructionKind::eGreaterThan:
+        case IR::NodeKind::eGreaterThan:
             return "OpGreaterThan";
-        case demir::IR::InstructionKind::eGreaterThanEqual:
+        case IR::NodeKind::eGreaterThanEqual:
             return "OpGreaterThanEqual";
-        case demir::IR::InstructionKind::eLessThan:
+        case IR::NodeKind::eLessThan:
             return "OpLessThan";
-        case demir::IR::InstructionKind::eLessThanEqual:
+        case IR::NodeKind::eLessThanEqual:
             return "OpLessThanEqual";
-        case demir::IR::InstructionKind::eSelectionMerge:
+        case IR::NodeKind::eSelectionMerge:
             return "OpSelectionMerge";
-        case demir::IR::InstructionKind::eLoopMerge:
+        case IR::NodeKind::eLoopMerge:
             return "OpLoopMerge";
+        case IR::NodeKind::eType:
+            return "OpType";
+        case IR::NodeKind::eConstant:
+            return "OpConstant";
+        case IR::NodeKind::eVariable:
+            return "OpVariable";
+        case IR::NodeKind::eBasicBlock:
+            return "OpLabel";
+        case IR::NodeKind::eFunction:
+            return "OpFunction";
     }
 }
 
-auto instruction_type_kind_to_str(demir::IR::TypeKind kind) -> std::string_view {
+auto instruction_type_kind_to_str(IR::TypeKind kind) -> std::string_view {
     switch (kind) {
-        case demir::IR::TypeKind::eVoid:
+        case IR::TypeKind::eVoid:
             return "void";
-        case demir::IR::TypeKind::eBool:
+        case IR::TypeKind::eBool:
             return "bool";
-        case demir::IR::TypeKind::eInt:
+        case IR::TypeKind::eInt:
             return "int";
-        case demir::IR::TypeKind::eFloat:
+        case IR::TypeKind::eFloat:
             return "float";
     }
 }
 
-struct PrinterVisitor : demir::AST::Visitor {
-    using demir::AST::Visitor::visit;
+struct PrinterVisitor : AST::Visitor {
+    using AST::Visitor::visit;
 
     int depth = 0;
 
     PrinterVisitor() = default;
-    PrinterVisitor(demir::AST::Module *module_) : demir::AST::Visitor(module_) {}
+    PrinterVisitor(AST::Module *module_) : AST::Visitor(module_) {}
 
     auto push(int size = 1) -> void {
         depth += size;
@@ -189,32 +201,32 @@ struct PrinterVisitor : demir::AST::Visitor {
         fmt::println(str, std::forward<Args>(args)...);
     }
 
-    auto visit(demir::AST::IdentifierExpression &v) -> void override {
+    auto visit(AST::IdentifierExpression &v) -> void override {
         print_indented("Identifier expression: {}", v.identifier_str);
     }
 
-    auto visit(demir::AST::ConstantValueExpression &v) -> void override {
+    auto visit(AST::ConstantValueExpression &v) -> void override {
         print_indented("Constant value expression:");
         push();
         auto kind_str = expression_value_kind_to_str(v.value.kind);
         switch (v.value.kind) {
-            case demir::AST::ExpressionValueKind::eBool: {
+            case AST::ExpressionValueKind::eBool: {
                 print_indented("Value: {}", v.value.bool_val, kind_str);
             } break;
-            case demir::AST::ExpressionValueKind::ei8:
-            case demir::AST::ExpressionValueKind::ei16:
-            case demir::AST::ExpressionValueKind::ei32:
-            case demir::AST::ExpressionValueKind::ei64: {
+            case AST::ExpressionValueKind::ei8:
+            case AST::ExpressionValueKind::ei16:
+            case AST::ExpressionValueKind::ei32:
+            case AST::ExpressionValueKind::ei64: {
                 print_indented("Value: {}", v.value.i64_val, kind_str);
             } break;
-            case demir::AST::ExpressionValueKind::eu8:
-            case demir::AST::ExpressionValueKind::eu16:
-            case demir::AST::ExpressionValueKind::eu32:
-            case demir::AST::ExpressionValueKind::eu64: {
+            case AST::ExpressionValueKind::eu8:
+            case AST::ExpressionValueKind::eu16:
+            case AST::ExpressionValueKind::eu32:
+            case AST::ExpressionValueKind::eu64: {
                 print_indented("Value: {}", v.value.u64_val, kind_str);
             } break;
-            case demir::AST::ExpressionValueKind::ef32:
-            case demir::AST::ExpressionValueKind::ef64: {
+            case AST::ExpressionValueKind::ef32:
+            case AST::ExpressionValueKind::ef64: {
                 print_indented("Value: {}", v.value.f64_val, kind_str);
             } break;
             default: {
@@ -225,18 +237,18 @@ struct PrinterVisitor : demir::AST::Visitor {
         pop();
     }
 
-    auto visit(demir::AST::AssignExpression &v) -> void override {
+    auto visit(AST::AssignExpression &v) -> void override {
         print_indented("Assign expression:");
         push();
         print_indented("Type: {}", assignment_to_str(v.assign_type));
-        if (v.lhs_expression_id != demir::AST::NodeID::Invalid) {
+        if (v.lhs_expression_id != AST::NodeID::Invalid) {
             print_indented("LHS:");
             push();
             visit(v.lhs_expression_id);
             pop();
         }
 
-        if (v.rhs_expression_id != demir::AST::NodeID::Invalid) {
+        if (v.rhs_expression_id != AST::NodeID::Invalid) {
             print_indented("RHS:");
             push();
             visit(v.rhs_expression_id);
@@ -246,18 +258,18 @@ struct PrinterVisitor : demir::AST::Visitor {
         pop();
     }
 
-    auto visit(demir::AST::BinaryExpression &v) -> void override {
+    auto visit(AST::BinaryExpression &v) -> void override {
         print_indented("Binary expression:");
         push();
         print_indented("Op: {}", binary_op_to_str(v.op));
-        if (v.lhs_expression_id != demir::AST::NodeID::Invalid) {
+        if (v.lhs_expression_id != AST::NodeID::Invalid) {
             print_indented("LHS:");
             push();
             visit(v.lhs_expression_id);
             pop();
         }
 
-        if (v.rhs_expression_id != demir::AST::NodeID::Invalid) {
+        if (v.rhs_expression_id != AST::NodeID::Invalid) {
             print_indented("RHS:");
             push();
             visit(v.rhs_expression_id);
@@ -266,7 +278,7 @@ struct PrinterVisitor : demir::AST::Visitor {
         pop();
     }
 
-    auto visit(demir::AST::CallFunctionExpression &v) -> void override {
+    auto visit(AST::CallFunctionExpression &v) -> void override {
         print_indented("Call function expression:");
         push();
         visit(v.function_expression_id);
@@ -276,7 +288,7 @@ struct PrinterVisitor : demir::AST::Visitor {
         pop();
     }
 
-    auto visit(demir::AST::MultiStatement &v) -> void override {
+    auto visit(AST::MultiStatement &v) -> void override {
         print_indented("Multi statement:");
         push();
         for (auto node_id : v.statement_ids) {
@@ -285,18 +297,18 @@ struct PrinterVisitor : demir::AST::Visitor {
         pop();
     }
 
-    auto visit(demir::AST::DeclareVarStatement &v) -> void override {
+    auto visit(AST::DeclareVarStatement &v) -> void override {
         print_indented("Declare var statement:");
         push();
         print_indented("Identifier: {}", v.identifier_str);
         print_indented("Type: {}", expression_value_kind_to_str(v.value_kind));
-        if (v.initial_expression_id != demir::AST::NodeID::Invalid) {
+        if (v.initial_expression_id != AST::NodeID::Invalid) {
             visit(v.initial_expression_id);
         }
         pop();
     }
 
-    auto visit(demir::AST::DeclareFunctionStatement &v) -> void override {
+    auto visit(AST::DeclareFunctionStatement &v) -> void override {
         print_indented("Declare function statement:");
         push();
         print_indented("Identifier: {}", v.identifier_str);
@@ -305,7 +317,7 @@ struct PrinterVisitor : demir::AST::Visitor {
             print_indented("Parameter type: {}", expression_value_kind_to_str(param.value_kind));
         }
 
-        if (v.return_value_kind != demir::AST::ExpressionValueKind::eNone) {
+        if (v.return_value_kind != AST::ExpressionValueKind::eNone) {
             print_indented("Return type: {}", expression_value_kind_to_str(v.return_value_kind));
         }
 
@@ -313,23 +325,23 @@ struct PrinterVisitor : demir::AST::Visitor {
         pop();
     }
 
-    auto visit(demir::AST::ReturnStatement &v) -> void override {
+    auto visit(AST::ReturnStatement &v) -> void override {
         print_indented("Return statement:");
         push();
-        if (v.return_expression_id != demir::AST::NodeID::Invalid) {
+        if (v.return_expression_id != AST::NodeID::Invalid) {
             visit(v.return_expression_id);
         }
         pop();
     }
 
-    auto visit(demir::AST::ExpressionStatement &v) -> void override {
+    auto visit(AST::ExpressionStatement &v) -> void override {
         print_indented("Expression statement:");
         push();
         visit(v.expression_id);
         pop();
     }
 
-    auto visit(demir::AST::WhileStatement &v) -> void override {
+    auto visit(AST::WhileStatement &v) -> void override {
         print_indented("While statement:");
         push();
         print_indented("Condition:");
@@ -339,7 +351,7 @@ struct PrinterVisitor : demir::AST::Visitor {
         pop();
     }
 
-    auto visit(demir::AST::BranchStatement &v) -> void override {
+    auto visit(AST::BranchStatement &v) -> void override {
         print_indented("Branch statement:");
         push();
         print_indented("Conditions:");
@@ -348,7 +360,7 @@ struct PrinterVisitor : demir::AST::Visitor {
             visit(cond.condition_expression_id);
             visit(cond.true_case_statement_id);
         }
-        if (v.false_case_statement_id != demir::AST::NodeID::Invalid) {
+        if (v.false_case_statement_id != AST::NodeID::Invalid) {
             print_indented("Else:");
             push();
             visit(v.false_case_statement_id);
@@ -358,7 +370,7 @@ struct PrinterVisitor : demir::AST::Visitor {
         pop();
     }
 
-    auto visit(demir::AST::MultiwayBranchStatement &v) -> void override {
+    auto visit(AST::MultiwayBranchStatement &v) -> void override {
         print_indented("Multiway statement:");
         push();
         print_indented("Selector:");
@@ -369,7 +381,7 @@ struct PrinterVisitor : demir::AST::Visitor {
             visit(branch.statement_id);
         }
 
-        if (v.default_statement_id != demir::AST::NodeID::Invalid) {
+        if (v.default_statement_id != AST::NodeID::Invalid) {
             print_indented("Default branch:");
             visit(v.default_statement_id);
         }
@@ -377,11 +389,11 @@ struct PrinterVisitor : demir::AST::Visitor {
         pop();
     }
 
-    auto visit(demir::AST::BreakStatement &) -> void override {
+    auto visit(AST::BreakStatement &) -> void override {
         print_indented("Break statement");
     }
 
-    auto visit(demir::AST::ContinueStatement &) -> void override {
+    auto visit(AST::ContinueStatement &) -> void override {
         print_indented("Continue statement");
     }
 };
@@ -393,21 +405,21 @@ int main(int, char *[]) {
     file.seekg(0);
     file.read(source.data(), static_cast<std::streamsize>(source.length()));
 
-    auto allocator = demir::BumpAllocator{};
-    auto parse_result = demir::Parser::parse(&allocator, source);
+    auto allocator = BumpAllocator{};
+    auto parse_result = Parser::parse(&allocator, source);
 
     fmt::println("==== AST DUMP ====");
-    auto ast_module = demir::AST::Module(std::move(parse_result.nodes), parse_result.root_node_id);
+    auto ast_module = AST::Module(std::move(parse_result.nodes), parse_result.root_node_id);
     auto ast_module_printer = PrinterVisitor(&ast_module);
     ast_module_printer.visit(ast_module.root_node_id);
 
     fmt::println("==== IR DUMP ====");
     fmt::println("header:");
     using namespace demir;
-    auto ir_module = IR::lower_ast_module(&allocator, &ast_module);
+    auto ir_module_builder = IR::ModuleBuilder(&allocator, &ast_module);
+    auto ir_module = ir_module_builder.build();
     auto functions = std::vector<IR::Function>();
-    u32 node_id = 0;
-    for (const auto &node : ir_module.nodes) {
+    for (const auto &[node, node_id] : std::views::zip(ir_module.nodes, std::views::iota(0_sz))) {
         if (node.kind == IR::NodeKind::eFunction) {
             functions.push_back(node.function);
         }
@@ -429,7 +441,7 @@ int main(int, char *[]) {
             auto &type = type_node->type;
             auto value_str = std::string{};
             switch (type.type_kind) {
-                case demir::IR::TypeKind::eInt: {
+                case IR::TypeKind::eInt: {
                     switch (type.width) {
                         case 8: {
                             value_str = std::to_string(type.is_signed ? constant.i8_value : constant.u8_value);
@@ -446,7 +458,7 @@ int main(int, char *[]) {
                         default:;
                     }
                 } break;
-                case demir::IR::TypeKind::eFloat: {
+                case IR::TypeKind::eFloat: {
                 } break;
                 default: {
                     value_str = "0";
@@ -455,8 +467,6 @@ int main(int, char *[]) {
 
             fmt::println("  %{:<2} = OpConstant [type: %{}] [value: {}]", node_id, std::to_underlying(constant.type_node_id), value_str);
         }
-
-        node_id++;
     }
 
     auto visited_blocks = ankerl::unordered_dense::set<IR::NodeID>();
@@ -470,33 +480,27 @@ int main(int, char *[]) {
 
         auto *block_node = ir_module.get_node(block_id);
         auto &block = block_node->basic_block;
-        for (auto var_id : block.variable_ids) {
-            auto *var_node = ir_module.get_node(var_id);
-            auto &variable = var_node->variable;
-            fmt::println("  %{:<2} = OpVariable [type: %{}]", std::to_underlying(var_id), std::to_underlying(variable.type_node_id));
-        }
 
-        for (auto instr_id : block.instruction_ids) {
-            auto *instr_node = ir_module.get_node(instr_id);
-            auto &instr = instr_node->instruction;
-            fmt::print("  %{:<2} = {} ", std::to_underlying(instr_id), instruction_kind_to_str(instr.header.instr_kind));
+        for (auto node_id : block.instruction_ids) {
+            auto *instr_node = ir_module.get_node(node_id);
+            fmt::print("  %{:<2} = {} ", std::to_underlying(node_id), instruction_kind_to_str(instr_node->kind));
 
-            switch (instr.header.instr_kind) {
-                case demir::IR::InstructionKind::eNoOp:
-                case demir::IR::InstructionKind::eKill: {
+            switch (instr_node->kind) {
+                case IR::NodeKind::eNoOp:
+                case IR::NodeKind::eKill: {
                     fmt::println("");
                 } break;
-                case demir::IR::InstructionKind::eReturn: {
-                    auto &return_instr = instr.return_instr;
+                case IR::NodeKind::eReturn: {
+                    auto &return_instr = instr_node->return_instr;
                     fmt::println("[return: %{}]", std::to_underlying(return_instr.returning_node_id));
                 } break;
-                case demir::IR::InstructionKind::eBranch: {
-                    auto &branch_instr = instr.branch_instr;
+                case IR::NodeKind::eBranch: {
+                    auto &branch_instr = instr_node->branch_instr;
                     fmt::println("[branch: %{}]", std::to_underlying(branch_instr.next_block_node_id));
                     visitor(branch_instr.next_block_node_id);
                 } break;
-                case demir::IR::InstructionKind::eConditionalBranch: {
-                    auto &cond_branch_instr = instr.conditional_branch_instr;
+                case IR::NodeKind::eConditionalBranch: {
+                    auto &cond_branch_instr = instr_node->conditional_branch_instr;
                     for (const auto &cond : cond_branch_instr.conditions) {
                         fmt::print(
                             "[condition: %{}] [true_branch: %{}] ",
@@ -513,51 +517,59 @@ int main(int, char *[]) {
 
                     visitor(cond_branch_instr.false_block_node_id);
                 } break;
-                case demir::IR::InstructionKind::eLoad: {
-                    auto &load_instr = instr.load_instr;
+                case IR::NodeKind::eLoad: {
+                    auto &load_instr = instr_node->load_instr;
                     fmt::println(
                         "[type: %{}] [variable: %{}]",
                         std::to_underlying(load_instr.type_node_id),
                         std::to_underlying(load_instr.variable_node_id)
                     );
                 } break;
-                case demir::IR::InstructionKind::eStore: {
-                    auto &store_instr = instr.store_instr;
+                case IR::NodeKind::eStore: {
+                    auto &store_instr = instr_node->store_instr;
                     fmt::println("[dst: %{}] [src: %{}]", std::to_underlying(store_instr.dst_node_id), std::to_underlying(store_instr.src_node_id));
                 } break;
 
-                case demir::IR::InstructionKind::eAdd:
-                case demir::IR::InstructionKind::eSub:
-                case demir::IR::InstructionKind::eMul:
-                case demir::IR::InstructionKind::eDiv:
-                case demir::IR::InstructionKind::eEqual:
-                case demir::IR::InstructionKind::eNotEqual:
-                case demir::IR::InstructionKind::eGreaterThan:
-                case demir::IR::InstructionKind::eGreaterThanEqual:
-                case demir::IR::InstructionKind::eLessThan:
-                case demir::IR::InstructionKind::eLessThanEqual: {
-                    auto &alu_instr = instr.add_instr;
+                case IR::NodeKind::eAdd:
+                case IR::NodeKind::eSub:
+                case IR::NodeKind::eMul:
+                case IR::NodeKind::eDiv:
+                case IR::NodeKind::eEqual:
+                case IR::NodeKind::eNotEqual:
+                case IR::NodeKind::eGreaterThan:
+                case IR::NodeKind::eGreaterThanEqual:
+                case IR::NodeKind::eLessThan:
+                case IR::NodeKind::eLessThanEqual: {
+                    auto &alu_instr = instr_node->add_instr;
                     fmt::println(//
                             "[lhs: %{}] [rhs: %{}]",
                             std::to_underlying(alu_instr.lhs_node_id),
                             std::to_underlying(alu_instr.rhs_node_id)
                         );
                 } break;
-                case demir::IR::InstructionKind::eSelectionMerge: {
-                    auto &selection_merge_instr = instr.selection_merge_instr;
+                case IR::NodeKind::eSelectionMerge: {
+                    auto &selection_merge_instr = instr_node->selection_merge_instr;
                     fmt::println("[dst block: %{}]", std::to_underlying(selection_merge_instr.dst_block_node_id));
                 } break;
-                case demir::IR::InstructionKind::eLoopMerge: {
-                    auto &loop_merge_instr = instr.loop_merge_instr;
+                case IR::NodeKind::eLoopMerge: {
+                    auto &loop_merge_instr = instr_node->loop_merge_instr;
                     fmt::println(
                         "[dst block: %{}] [continuing block: %{}]",
                         std::to_underlying(loop_merge_instr.dst_block_node_id),
                         std::to_underlying(loop_merge_instr.continuing_block_node_id)
                     );
                 } break;
-                case demir::IR::InstructionKind::eMultiwayBranch:
-                case demir::IR::InstructionKind::eFunctionCall: {
+                case IR::NodeKind::eVariable: {
+                    auto &variable = instr_node->variable;
+                    fmt::println("  %{:<2} = OpVariable [type: %{}]", std::to_underlying(node_id), std::to_underlying(variable.type_node_id));
                 } break;
+                case IR::NodeKind::eMultiwayBranch:
+                case IR::NodeKind::eFunctionCall:
+                case IR::NodeKind::eType:
+                case IR::NodeKind::eConstant:
+                case IR::NodeKind::eBasicBlock:
+                case IR::NodeKind::eFunction:
+                    break;
             }
         }
     };

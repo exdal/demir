@@ -61,4 +61,52 @@ auto Visitor::visit(NodeID node_id) -> void {
     }
 }
 
+StatementVisitor::StatementVisitor(Module *module_) : module(module_) {}
+
+auto StatementVisitor::visit(NodeID node_id) -> void {
+    auto *node = module->get_node(node_id);
+    if (!node) {
+        return;
+    }
+
+    switch (node->kind) {
+        case NodeKind::eMultiStatement: {
+            visit(node->multi_statement);
+        } break;
+        case NodeKind::eDeclareVarStatement: {
+            visit(node->decl_var_statement);
+        } break;
+        case NodeKind::eDeclareFunctionStatement: {
+            visit(node->decl_function_statement);
+        } break;
+        case NodeKind::eReturnStatement: {
+            visit(node->return_statement);
+        } break;
+        case NodeKind::eExpressionStatement: {
+            visit(node->expression_statement);
+        } break;
+        case NodeKind::eWhileStatement: {
+            visit(node->while_statement);
+        } break;
+        case NodeKind::eBranchStatement: {
+            visit(node->branch_statement);
+        } break;
+        case NodeKind::eMultiwayBranchStatement: {
+            visit(node->multiway_branch_statement);
+        } break;
+        case NodeKind::eBreakStatement: {
+            visit(node->break_statement);
+        } break;
+        case NodeKind::eContinueStatement: {
+            visit(node->continue_statement);
+        } break;
+        case NodeKind::eIdentifierExpression:
+        case NodeKind::eConstantValueExpression:
+        case NodeKind::eAssignExpression:
+        case NodeKind::eBinaryExpression:
+        case NodeKind::eCallFunctionExpression:
+        case NodeKind::eNone:;
+    }
+}
+
 } // namespace demir::AST

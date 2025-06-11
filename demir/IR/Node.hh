@@ -7,16 +7,6 @@ namespace demir::IR {
 enum class NodeID : u32 { Invalid = ~0_u32 };
 
 enum class NodeKind : u32 {
-    eNone = 0,
-    eInstruction,
-    eType,
-    eConstant,
-    eVariable,
-    eBasicBlock,
-    eFunction,
-};
-
-enum class InstructionKind : u32 {
     eNoOp = 0,
     // Control Flow instructions
     eReturn, // terminating
@@ -41,52 +31,64 @@ enum class InstructionKind : u32 {
     eLessThanEqual,
     // Function instructions
     eFunctionCall,
-};
 
-template<InstructionKind KIND>
-struct InstructionHeader {
-    NodeKind node_kind = NodeKind::eInstruction;
-    InstructionKind instr_kind = KIND;
+    // Virtual nodes
+    eType,
+    eConstant,
+    eVariable,
+    eBasicBlock,
+    eFunction,
 };
 
 // @grok what should i rename this to?
-template<InstructionKind KIND>
+template<NodeKind KIND>
 struct HandedInstruction {
-    NodeKind node_kind = NodeKind::eInstruction;
-    InstructionKind instr_kind = KIND;
+    NodeKind kind = KIND;
 
     NodeID lhs_node_id = NodeID::Invalid;
     NodeID rhs_node_id = NodeID::Invalid;
 };
 
 // Terminating instruction, must be at the end of the block.
-struct ReturnInstruction : InstructionHeader<InstructionKind::eReturn> {
+struct ReturnInstruction {
+    NodeKind kind = NodeKind::eReturn;
+
     NodeID returning_node_id = NodeID::Invalid;
 };
 
 // Terminating instruction, must be at the end of the block.
-struct KillInstruction : InstructionHeader<InstructionKind::eKill> {};
+struct KillInstruction {
+    NodeKind kind = NodeKind::eKill;
+};
 
-struct SelectionMerge : InstructionHeader<InstructionKind::eSelectionMerge> {
+struct SelectionMergeInstruction {
+    NodeKind kind = NodeKind::eSelectionMerge;
+
     NodeID dst_block_node_id = NodeID::Invalid;
 };
 
-struct LoopMerge : InstructionHeader<InstructionKind::eLoopMerge> {
+struct LoopMergeInstruction {
+    NodeKind kind = NodeKind::eLoopMerge;
+
     NodeID dst_block_node_id = NodeID::Invalid;
     NodeID continuing_block_node_id = NodeID::Invalid;
 };
 
 // Terminating instruction, must be at the end of the block.
-struct BranchInstruction : InstructionHeader<InstructionKind::eBranch> {
+struct BranchInstruction {
+    NodeKind kind = NodeKind::eBranch;
+
     NodeID next_block_node_id = NodeID::Invalid;
 };
 
 // Terminating instruction, must be at the end of the block.
-struct ConditionalBranchInstruction : InstructionHeader<InstructionKind::eConditionalBranch> {
+struct ConditionalBranchInstruction  {
     struct Condition {
         NodeID condition_node_id = NodeID::Invalid;
         NodeID true_block_node_id = NodeID::Invalid;
     };
+
+    NodeKind kind = NodeKind::eConditionalBranch;
 
     Span<Condition> conditions = {};
     NodeID false_block_node_id = NodeID::Invalid;
@@ -94,71 +96,51 @@ struct ConditionalBranchInstruction : InstructionHeader<InstructionKind::eCondit
 };
 
 // Terminating instruction, must be at the end of the block.
-struct MultiwayInstruction : InstructionHeader<InstructionKind::eMultiwayBranch> {
+struct MultiwayInstruction  {
     struct Branch {
         i64 literal = ~0_i64;
         NodeID target_block_id = NodeID::Invalid;
     };
+
+    NodeKind kind = NodeKind::eMultiwayBranch;
 
     NodeID selector_node_id = NodeID::Invalid;
     NodeID default_block_node_id = NodeID::Invalid;
     Span<Branch> branches = {};
 };
 
-struct LoadInstruction : InstructionHeader<InstructionKind::eLoad> {
+struct LoadInstruction  {
+    NodeKind kind = NodeKind::eLoad;
+
     NodeID type_node_id = NodeID::Invalid;
     NodeID variable_node_id = NodeID::Invalid;
 };
 
-struct StoreInstruction : InstructionHeader<InstructionKind::eStore> {
+struct StoreInstruction {
+    NodeKind kind = NodeKind::eStore;
+
     NodeID dst_node_id = NodeID::Invalid;
     NodeID src_node_id = NodeID::Invalid;
 };
 
-using AddInstruction = HandedInstruction<InstructionKind::eAdd>;
-using SubInstruction = HandedInstruction<InstructionKind::eSub>;
-using DivInstruction = HandedInstruction<InstructionKind::eDiv>;
-using MulInstruction = HandedInstruction<InstructionKind::eMul>;
+using AddInstruction = HandedInstruction<NodeKind::eAdd>;
+using SubInstruction = HandedInstruction<NodeKind::eSub>;
+using DivInstruction = HandedInstruction<NodeKind::eDiv>;
+using MulInstruction = HandedInstruction<NodeKind::eMul>;
 
-using EqualInstruction = HandedInstruction<InstructionKind::eEqual>;
-using NotEqualInstruction = HandedInstruction<InstructionKind::eNotEqual>;
-using GreaterThanInstruction = HandedInstruction<InstructionKind::eGreaterThan>;
-using GreaterThanEqualInstruction = HandedInstruction<InstructionKind::eGreaterThanEqual>;
-using LessThanInstruction = HandedInstruction<InstructionKind::eLessThan>;
-using LessThanEqualInstruction = HandedInstruction<InstructionKind::eLessThanEqual>;
+using EqualInstruction = HandedInstruction<NodeKind::eEqual>;
+using NotEqualInstruction = HandedInstruction<NodeKind::eNotEqual>;
+using GreaterThanInstruction = HandedInstruction<NodeKind::eGreaterThan>;
+using GreaterThanEqualInstruction = HandedInstruction<NodeKind::eGreaterThanEqual>;
+using LessThanInstruction = HandedInstruction<NodeKind::eLessThan>;
+using LessThanEqualInstruction = HandedInstruction<NodeKind::eLessThanEqual>;
 
-struct FunctionCallInstruction : InstructionHeader<InstructionKind::eFunctionCall> {
+struct FunctionCallInstruction  {
+    NodeKind kind = NodeKind::eFunctionCall;
+
     NodeID return_type_node_id = NodeID::Invalid;
     NodeID function_node_id = NodeID::Invalid;
     Span<NodeID> param_node_ids = {};
-};
-
-// TODO: Clean up this shit
-union Instruction {
-    InstructionHeader<InstructionKind::eNoOp> header = {};
-
-    ReturnInstruction return_instr;
-    KillInstruction kill_instr;
-    SelectionMerge selection_merge_instr;
-    LoopMerge loop_merge_instr;
-    BranchInstruction branch_instr;
-    ConditionalBranchInstruction conditional_branch_instr;
-    MultiwayInstruction multiway_branch_instr;
-
-    LoadInstruction load_instr;
-    StoreInstruction store_instr;
-    AddInstruction add_instr;
-    SubInstruction sub_instr;
-    MulInstruction mul_instr;
-    DivInstruction div_instr;
-    EqualInstruction equal_instr;
-    NotEqualInstruction not_equal_instr;
-    GreaterThanInstruction greater_than_instr;
-    GreaterThanEqualInstruction greater_than_eq_instr;
-    LessThanInstruction less_than_instr;
-    LessThanEqualInstruction less_than_eq_instr;
-
-    FunctionCallInstruction function_call_instr;
 };
 
 enum class TypeKind : u32 {
@@ -219,7 +201,27 @@ struct Function {
 union Node {
     NodeKind kind = NodeKind::eVariable;
 
-    Instruction instruction;
+    ReturnInstruction return_instr;
+    KillInstruction kill_instr;
+    SelectionMergeInstruction selection_merge_instr;
+    LoopMergeInstruction loop_merge_instr;
+    BranchInstruction branch_instr;
+    ConditionalBranchInstruction conditional_branch_instr;
+    MultiwayInstruction multiway_branch_instr;
+    LoadInstruction load_instr;
+    StoreInstruction store_instr;
+    AddInstruction add_instr;
+    SubInstruction sub_instr;
+    MulInstruction mul_instr;
+    DivInstruction div_instr;
+    EqualInstruction equal_instr;
+    NotEqualInstruction not_equal_instr;
+    GreaterThanInstruction greater_than_instr;
+    GreaterThanEqualInstruction greater_than_eq_instr;
+    LessThanInstruction less_than_instr;
+    LessThanEqualInstruction less_than_eq_instr;
+    FunctionCallInstruction function_call_instr;
+
     Type type;
     Constant constant;
     Variable variable;
