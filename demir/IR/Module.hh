@@ -47,7 +47,7 @@ struct ModuleBuilder : AST::StatementVisitor {
     AST::Module *ast_module = nullptr;
 
     std::vector<Node> nodes = {};
-    SymbolMap<std::string_view, NodeID> symbols = {};
+    SymbolMap<std::string_view, NodeID, NodeID> symbols = {};
 
     std::vector<NodeID> type_node_ids = {};
     std::vector<NodeID> constant_node_ids = {};
@@ -68,10 +68,10 @@ struct ModuleBuilder : AST::StatementVisitor {
     auto make_block_builder(this ModuleBuilder &) -> BasicBlockBuilder;
     auto make_block_builder(this ModuleBuilder &, NodeID basic_block_node_id) -> BasicBlockBuilder;
     auto end_block_builder(this ModuleBuilder &, BasicBlockBuilder &&basic_block_builder) -> NodeID;
-    auto set_block_builder(this ModuleBuilder &, BasicBlockBuilder &&basic_block_builder) -> void;
-    auto borrow_block_builder(this ModuleBuilder &) -> BasicBlockBuilder;
+    auto acquire_block_builder(this ModuleBuilder &) -> BasicBlockBuilder;
+    auto release_block_builder(this ModuleBuilder &, BasicBlockBuilder &&basic_block_builder) -> void;
 
-    auto push_scope(this ModuleBuilder &) -> void;
+    auto push_scope(this ModuleBuilder &, NodeID begin_marker_node_id = NodeID::Invalid, NodeID end_marker_node_id = NodeID::Invalid) -> void;
     auto pop_scope(this ModuleBuilder &) -> void;
 
     auto lookup_identifier(this ModuleBuilder &, std::string_view identifier_str) -> NodeID;

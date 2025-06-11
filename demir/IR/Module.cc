@@ -302,14 +302,14 @@ auto ModuleBuilder::end_block_builder(this ModuleBuilder &self, BasicBlockBuilde
     return basic_block_builder.node_id;
 }
 
-auto ModuleBuilder::set_block_builder(this ModuleBuilder &self, BasicBlockBuilder &&basic_block_builder) -> void {
+auto ModuleBuilder::release_block_builder(this ModuleBuilder &self, BasicBlockBuilder &&basic_block_builder) -> void {
     self.block_builder.emplace(std::move(basic_block_builder));
 }
 
-auto ModuleBuilder::borrow_block_builder(this ModuleBuilder &self) -> BasicBlockBuilder {
+auto ModuleBuilder::acquire_block_builder(this ModuleBuilder &self) -> BasicBlockBuilder {
     if (!self.block_builder.has_value()) {
         auto new_basic_block_builder = self.make_block_builder();
-        self.set_block_builder(std::move(new_basic_block_builder));
+        self.release_block_builder(std::move(new_basic_block_builder));
     }
 
     auto block_builder = std::move(self.block_builder).value();
@@ -318,8 +318,8 @@ auto ModuleBuilder::borrow_block_builder(this ModuleBuilder &self) -> BasicBlock
     return block_builder;
 }
 
-auto ModuleBuilder::push_scope(this ModuleBuilder &self) -> void {
-    self.symbols.push_scope();
+auto ModuleBuilder::push_scope(this ModuleBuilder &self, NodeID begin_marker_node_id, NodeID end_marker_node_id) -> void {
+    self.symbols.push_scope(begin_marker_node_id, end_marker_node_id);
 }
 
 auto ModuleBuilder::pop_scope(this ModuleBuilder &self) -> void {
@@ -467,11 +467,11 @@ auto ModuleBuilder::visit(AST::DeclareFunctionStatement &statement) -> void {
     this->symbols.push_scope();
 
     //  ── FUNCTION BODY ───────────────────────────────────────────────────
-    this->set_block_builder(std::move(basic_block_builder));
+    this->release_block_builder(std::move(basic_block_builder));
     this->visit(statement.body_statement_id);
 
     //  ── FUNCTION FOOTER ─────────────────────────────────────────────────
-    auto last_block_builder = this->borrow_block_builder();
+    auto last_block_builder = this->acquire_block_builder();
     auto &last_block = last_block_builder.get_underlying();
 
     // Insert implicit return when available
@@ -491,19 +491,19 @@ auto ModuleBuilder::visit(AST::DeclareFunctionStatement &statement) -> void {
 auto ModuleBuilder::visit(AST::ReturnStatement &statement) -> void {
     auto return_expr_type_value = this->ast_module->get_underlying_expression_value(statement.return_expression_id);
 
-    auto block_builder = this->borrow_block_builder();
+    auto block_builder = this->acquire_block_builder();
     block_builder.terminate_return(return_expr_type_value.value_or(AST::ExpressionValue{}).kind);
     this->end_block_builder(std::move(block_builder));
 }
 
 auto ModuleBuilder::visit(AST::ExpressionStatement &statement) -> void {
-    auto block_builder = this->borrow_block_builder();
+    auto block_builder = this->acquire_block_builder();
     block_builder.lower_expression(statement.expression_id);
-    this->set_block_builder(std::move(block_builder));
+    this->release_block_builder(std::move(block_builder));
 }
 
 auto ModuleBuilder::visit(AST::WhileStatement &statement) -> void {
-    auto block_builder = this->borrow_block_builder();
+    auto block_builder = this->acquire_block_builder();
 
     //  ── LOOP HEADER ─────────────────────────────────────────────────────
     auto loop_begin_block_node_id = this->make_block();
@@ -548,24 +548,24 @@ auto ModuleBuilder::visit(AST::WhileStatement &statement) -> void {
 
     //  ── STATEMENT BODY ──────────────────────────────────────────────────
     block_builder = this->make_block_builder(body_block_node_id);
-    this->set_block_builder(std::move(block_builder));
+    this->release_block_builder(std::move(block_builder));
 
-    this->push_scope();
+    this->push_scope(continuing_block_node_id, exiting_block_node_id);
     this->visit(statement.body_statement_id);
     this->pop_scope();
 
-    block_builder = this->borrow_block_builder();
+    block_builder = this->acquire_block_builder();
     if (!block_builder.has_terminator()) {
         block_builder.terminate_branch(continuing_block_node_id);
     }
     this->end_block_builder(std::move(block_builder));
 
     block_builder = this->make_block_builder(exiting_block_node_id);
-    this->set_block_builder(std::move(block_builder));
+    this->release_block_builder(std::move(block_builder));
 }
 
 auto ModuleBuilder::visit(AST::BranchStatement &statement) -> void {
-    auto block_builder = this->borrow_block_builder();
+    auto block_builder = this->acquire_block_builder();
 
     //  ── CONDITION HEADER ────────────────────────────────────────────────
     auto condition_block_ids = std::vector<ConditionalBranchInstruction::Condition>();
@@ -590,16 +590,19 @@ auto ModuleBuilder::visit(AST::BranchStatement &statement) -> void {
     block_builder.make_instr({ .conditional_branch_instr = conditional_branch_instr });
 
     //  ── CONDITION BODY ──────────────────────────────────────────────────
+    // carry over current markers
+    auto [begin_marker_node_id, end_marker_node_id] = this->symbols.current_scope_markers();
+
     for (const auto &[statement_cond, instr_cond] : std::views::zip(statement.conditions, conditional_branch_instr.conditions)) {
         this->end_block_builder(std::move(block_builder));
         block_builder = this->make_block_builder(instr_cond.true_block_node_id);
-        this->set_block_builder(std::move(block_builder));
+        this->release_block_builder(std::move(block_builder));
 
-        this->push_scope();
+        this->push_scope(begin_marker_node_id, end_marker_node_id);
         this->visit(statement_cond.true_case_statement_id);
         this->pop_scope();
 
-        block_builder = this->borrow_block_builder();
+        block_builder = this->acquire_block_builder();
         if (!block_builder.has_terminator()) {
             block_builder.terminate_branch(exiting_block_node_id);
         }
@@ -608,13 +611,13 @@ auto ModuleBuilder::visit(AST::BranchStatement &statement) -> void {
 
     if (statement.false_case_statement_id != AST::NodeID::Invalid) {
         block_builder = this->make_block_builder(false_case_block_node_id);
-        this->set_block_builder(std::move(block_builder));
+        this->release_block_builder(std::move(block_builder));
 
-        this->push_scope();
+        this->push_scope(begin_marker_node_id, end_marker_node_id);
         this->visit(statement.false_case_statement_id);
         this->pop_scope();
 
-        block_builder = this->borrow_block_builder();
+        block_builder = this->acquire_block_builder();
         if (!block_builder.has_terminator()) {
             block_builder.terminate_branch(exiting_block_node_id);
         }
@@ -622,12 +625,25 @@ auto ModuleBuilder::visit(AST::BranchStatement &statement) -> void {
     }
 
     block_builder = this->make_block_builder(exiting_block_node_id);
-    this->set_block_builder(std::move(block_builder));
+    this->release_block_builder(std::move(block_builder));
 }
 
 auto ModuleBuilder::visit(AST::MultiwayBranchStatement &) -> void {}
-auto ModuleBuilder::visit(AST::BreakStatement &) -> void {}
-auto ModuleBuilder::visit(AST::ContinueStatement &) -> void {}
+auto ModuleBuilder::visit(AST::BreakStatement &) -> void {
+    auto [begin_marker_node_id, end_marker_node_id] = this->symbols.current_scope_markers();
+
+    auto block_builder = this->acquire_block_builder();
+    block_builder.terminate_branch(end_marker_node_id);
+    this->end_block_builder(std::move(block_builder));
+}
+
+auto ModuleBuilder::visit(AST::ContinueStatement &) -> void {
+    auto [begin_marker_node_id, end_marker_node_id] = this->symbols.current_scope_markers();
+
+    auto block_builder = this->acquire_block_builder();
+    block_builder.terminate_branch(begin_marker_node_id);
+    this->end_block_builder(std::move(block_builder));
+}
 
 //  ── MODULE ──────────────────────────────────────────────────────────
 
