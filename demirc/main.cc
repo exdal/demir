@@ -549,12 +549,12 @@ int main(int, char *[]) {
                 } break;
                 case IR::NodeKind::eSelectionMerge: {
                     auto &selection_merge_instr = instr_node->selection_merge_instr;
-                    fmt::println("[dst block: %{}]", std::to_underlying(selection_merge_instr.dst_block_node_id));
+                    fmt::println("[dst_block: %{}]", std::to_underlying(selection_merge_instr.dst_block_node_id));
                 } break;
                 case IR::NodeKind::eLoopMerge: {
                     auto &loop_merge_instr = instr_node->loop_merge_instr;
                     fmt::println(
-                        "[dst block: %{}] [continuing block: %{}]",
+                        "[dst_block: %{}] [continuing_block: %{}]",
                         std::to_underlying(loop_merge_instr.dst_block_node_id),
                         std::to_underlying(loop_merge_instr.continuing_block_node_id)
                     );
@@ -563,7 +563,21 @@ int main(int, char *[]) {
                     auto &variable = instr_node->variable;
                     fmt::println("  %{:<2} = OpVariable [type: %{}]", std::to_underlying(node_id), std::to_underlying(variable.type_node_id));
                 } break;
-                case IR::NodeKind::eMultiwayBranch:
+                case IR::NodeKind::eMultiwayBranch: {
+                    auto &multiway_branch = instr_node->multiway_branch_instr;
+                    fmt::print("[default_block: %{}]", std::to_underlying(multiway_branch.default_block_node_id));
+
+                    for (const auto &branch : multiway_branch.branches) {
+                        fmt::print(" [branch_value: {}] [dst_block: %{}]", branch.literal, std::to_underlying(branch.target_block_id));
+                    }
+
+                    fmt::println("");
+
+                    visitor(multiway_branch.default_block_node_id);
+                    for (const auto &branch : multiway_branch.branches) {
+                        visitor(branch.target_block_id);
+                    }
+                } break;
                 case IR::NodeKind::eFunctionCall:
                 case IR::NodeKind::eType:
                 case IR::NodeKind::eConstant:

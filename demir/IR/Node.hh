@@ -96,7 +96,7 @@ struct ConditionalBranchInstruction  {
 };
 
 // Terminating instruction, must be at the end of the block.
-struct MultiwayInstruction  {
+struct MultiwayBranchInstruction  {
     struct Branch {
         i64 literal = ~0_i64;
         NodeID target_block_id = NodeID::Invalid;
@@ -207,7 +207,7 @@ union Node {
     LoopMergeInstruction loop_merge_instr;
     BranchInstruction branch_instr;
     ConditionalBranchInstruction conditional_branch_instr;
-    MultiwayInstruction multiway_branch_instr;
+    MultiwayBranchInstruction multiway_branch_instr;
     LoadInstruction load_instr;
     StoreInstruction store_instr;
     AddInstruction add_instr;

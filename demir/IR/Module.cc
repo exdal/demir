@@ -628,7 +628,66 @@ auto ModuleBuilder::visit(AST::BranchStatement &statement) -> void {
     this->release_block_builder(std::move(block_builder));
 }
 
-auto ModuleBuilder::visit(AST::MultiwayBranchStatement &) -> void {}
+auto ModuleBuilder::visit(AST::MultiwayBranchStatement &statement) -> void {
+    auto block_builder = this->acquire_block_builder();
+
+    //  ── SWITCH HEADER ───────────────────────────────────────────────────
+    auto branches = std::vector<MultiwayBranchInstruction::Branch>();
+    for (const auto &branch : statement.branches) {
+        auto expr_value = this->ast_module->get_underlying_expression_value(branch.expression_id).value();
+        auto branch_block_node_id = this->make_block();
+
+        branches.push_back({ .literal = expr_value.i64_val, .target_block_id = branch_block_node_id });
+    }
+
+    auto exiting_block_node_id = this->make_block();
+    auto selector_node_id = block_builder.lower_expression(statement.selector_expression_id);
+    auto default_block_node_id = this->make_block();
+
+    block_builder.make_instr({ .selection_merge_instr = { .dst_block_node_id = exiting_block_node_id } });
+
+    auto multiway_branch_instr = MultiwayBranchInstruction{
+        .selector_node_id = selector_node_id,
+        .default_block_node_id = default_block_node_id,
+        .branches = this->allocator->copy_into(Span(branches)),
+    };
+    block_builder.make_instr({ .multiway_branch_instr = multiway_branch_instr });
+    this->end_block_builder(std::move(block_builder));
+
+    //  ── SWITCH BODY ─────────────────────────────────────────────────────
+    // start with default statement first
+    block_builder = this->make_block_builder(default_block_node_id);
+    this->release_block_builder(std::move(block_builder));
+
+    this->push_scope(NodeID::Invalid, exiting_block_node_id);
+    this->visit(statement.default_statement_id);
+    this->pop_scope();
+
+    block_builder = this->acquire_block_builder();
+    if (!block_builder.has_terminator()) {
+        block_builder.terminate_branch(exiting_block_node_id);
+    }
+    this->end_block_builder(std::move(block_builder));
+
+    for (const auto &[branch_statement, branch_instr] : std::views::zip(statement.branches, branches)) {
+        block_builder = this->make_block_builder(branch_instr.target_block_id);
+        this->release_block_builder(std::move(block_builder));
+
+        this->push_scope(NodeID::Invalid, exiting_block_node_id);
+        this->visit(branch_statement.statement_id);
+        this->pop_scope();
+
+        block_builder = this->acquire_block_builder();
+        if (!block_builder.has_terminator()) {
+            block_builder.terminate_branch(exiting_block_node_id);
+        }
+        this->end_block_builder(std::move(block_builder));
+    }
+
+    block_builder = this->make_block_builder(exiting_block_node_id);
+    this->release_block_builder(std::move(block_builder));
+}
+
 auto ModuleBuilder::visit(AST::BreakStatement &) -> void {
     auto [begin_marker_node_id, end_marker_node_id] = this->symbols.current_scope_markers();
 
