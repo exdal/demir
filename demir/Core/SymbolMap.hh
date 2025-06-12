@@ -6,8 +6,6 @@
 
 #include <ankerl/unordered_dense.h>
 
-#include <ranges>
-
 namespace demir {
 template<typename KeyT, typename ValueT, typename ScopeMarkerT>
 struct SymbolMap {
@@ -61,9 +59,10 @@ public:
         auto looking_scope = self.current_scope;
         while (looking_scope != 0) {
             const auto &cur_stack = self.scopes[looking_scope];
-            for (const auto &v : std::views::reverse(cur_stack)) {
-                auto value_it = v.map.find(key);
-                if (value_it != v.map.end()) {
+            if (!cur_stack.empty()) {
+                auto &scope = cur_stack.back();
+                auto value_it = scope.map.find(key);
+                if (value_it != scope.map.end()) {
                     return value_it->second;
                 }
             }

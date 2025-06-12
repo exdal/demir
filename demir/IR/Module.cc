@@ -1,5 +1,6 @@
 #include "demir/IR/Module.hh"
 
+#include <ranges>
 #include <utility>
 
 namespace demir::IR {
