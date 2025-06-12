@@ -193,8 +193,9 @@ auto BasicBlockBuilder::lower_expression(this BasicBlockBuilder &self, AST::Node
         case AST::NodeKind::eBinaryExpression: {
             return self.lower_binary_op_expression(expression_node->binary_expression);
         }
-        // TODO: function calls
-        case AST::NodeKind::eCallFunctionExpression:
+        case AST::NodeKind::eCallFunctionExpression: {
+            return self.lower_function_call_expression(expression_node->call_function_expression);
+        }
         default: {
             // Only expressions are allowed
             DEMIR_DEBUGBREAK();
@@ -205,8 +206,15 @@ auto BasicBlockBuilder::lower_expression(this BasicBlockBuilder &self, AST::Node
 
 auto BasicBlockBuilder::lower_identifier_expression(this BasicBlockBuilder &self, AST::IdentifierExpression &expression) -> NodeID {
     auto node_id = self.module_builder->lookup_identifier(expression.identifier_str);
+    auto *node = self.module_builder->get_node(node_id);
+    switch (node->kind) {
+        case NodeKind::eVariable: {
+            return self.load_variable(node_id);
+        } break;
+        default:;
+    }
 
-    return self.load_variable(node_id);
+    return node_id;
 }
 
 auto BasicBlockBuilder::lower_constant_expression(this BasicBlockBuilder &self, AST::ConstantValueExpression &expression) -> NodeID {
@@ -256,6 +264,26 @@ auto BasicBlockBuilder::lower_binary_op_expression(this BasicBlockBuilder &self,
 
     // TODO: Handle cases when its actually an assignment op, insert implicit x == true
     return self.lower_binary_op(expression.op, lhs_node_id, rhs_node_id);
+}
+
+auto BasicBlockBuilder::lower_function_call_expression(this BasicBlockBuilder &self, AST::CallFunctionExpression &expression) -> NodeID {
+    auto callee_node_id = self.lower_expression(expression.function_expression_id);
+    auto *callee_node = self.module_builder->get_node(callee_node_id);
+    auto &callee = callee_node->function;
+
+    auto parameter_node_ids = std::vector<NodeID>();
+    for (auto param_expression_id : expression.parameter_expression_ids) {
+        auto param_node_id = self.lower_expression(param_expression_id);
+        parameter_node_ids.push_back(param_node_id);
+    }
+
+    auto function_call_instr = FunctionCallInstruction{
+        .return_type_node_id = callee.return_type_node_id,
+        .callee_node_id = callee_node_id,
+        .param_node_ids = self.module_builder->allocator->copy_into(Span(parameter_node_ids)),
+    };
+
+    return self.make_instr({.function_call_instr = function_call_instr});
 }
 
 //  ── MODULE BUILDER ──────────────────────────────────────────────────

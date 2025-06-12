@@ -37,6 +37,7 @@ struct BasicBlockBuilder {
     auto lower_constant_expression(this BasicBlockBuilder &, AST::ConstantValueExpression &expression) -> NodeID;
     auto lower_assign_expression(this BasicBlockBuilder &, AST::AssignExpression &expression) -> NodeID;
     auto lower_binary_op_expression(this BasicBlockBuilder &, AST::BinaryExpression &expression) -> NodeID;
+    auto lower_function_call_expression(this BasicBlockBuilder &, AST::CallFunctionExpression &expression) -> NodeID;
 };
 
 struct Module;

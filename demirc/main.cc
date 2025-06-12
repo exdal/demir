@@ -282,9 +282,16 @@ struct PrinterVisitor : AST::Visitor {
         print_indented("Call function expression:");
         push();
         visit(v.function_expression_id);
+
+        push();
+        print_indented("Parameter expressions:");
         for (auto node_id : v.parameter_expression_ids) {
+            push();
             visit(node_id);
+            pop();
         }
+        pop();
+
         pop();
     }
 
@@ -418,56 +425,6 @@ int main(int, char *[]) {
     using namespace demir;
     auto ir_module_builder = IR::ModuleBuilder(&allocator, &ast_module);
     auto ir_module = ir_module_builder.build();
-    auto functions = std::vector<IR::Function>();
-    for (const auto &[node, node_id] : std::views::zip(ir_module.nodes, std::views::iota(0_sz))) {
-        if (node.kind == IR::NodeKind::eFunction) {
-            functions.push_back(node.function);
-        }
-
-        if (node.kind == IR::NodeKind::eType) {
-            auto &type = node.type;
-            fmt::println(
-                "  %{:<2} = OpType [kind: {}] [width: {}] [signed: {}]",
-                node_id,
-                instruction_type_kind_to_str(type.type_kind),
-                type.width,
-                type.is_signed
-            );
-        }
-
-        if (node.kind == IR::NodeKind::eConstant) {
-            auto &constant = node.constant;
-            auto *type_node = ir_module.get_node(constant.type_node_id);
-            auto &type = type_node->type;
-            auto value_str = std::string{};
-            switch (type.type_kind) {
-                case IR::TypeKind::eInt: {
-                    switch (type.width) {
-                        case 8: {
-                            value_str = std::to_string(type.is_signed ? constant.i8_value : constant.u8_value);
-                        } break;
-                        case 16: {
-                            value_str = std::to_string(type.is_signed ? constant.i16_value : constant.u16_value);
-                        } break;
-                        case 32: {
-                            value_str = std::to_string(type.is_signed ? constant.i32_value : constant.u32_value);
-                        } break;
-                        case 64: {
-                            value_str = std::to_string(type.is_signed ? constant.i64_value : constant.u64_value);
-                        } break;
-                        default:;
-                    }
-                } break;
-                case IR::TypeKind::eFloat: {
-                } break;
-                default: {
-                    value_str = "0";
-                } break;
-            }
-
-            fmt::println("  %{:<2} = OpConstant [type: %{}] [value: {}]", node_id, std::to_underlying(constant.type_node_id), value_str);
-        }
-    }
 
     auto visited_blocks = ankerl::unordered_dense::set<IR::NodeID>();
     auto visit_basic_block = [&](this auto &visitor, IR::NodeID block_id) -> void {
@@ -476,14 +433,14 @@ int main(int, char *[]) {
         }
         visited_blocks.emplace(block_id);
 
-        fmt::println("  %{:<2} = OpLabel", std::to_underlying(block_id));
+        fmt::println(" %{:<2} = OpLabel", std::to_underlying(block_id));
 
         auto *block_node = ir_module.get_node(block_id);
         auto &block = block_node->basic_block;
 
         for (auto node_id : block.instruction_ids) {
             auto *instr_node = ir_module.get_node(node_id);
-            fmt::print("  %{:<2} = {} ", std::to_underlying(node_id), instruction_kind_to_str(instr_node->kind));
+            fmt::print(" %{:<2} = {} ", std::to_underlying(node_id), instruction_kind_to_str(instr_node->kind));
 
             switch (instr_node->kind) {
                 case IR::NodeKind::eNoOp:
@@ -529,7 +486,6 @@ int main(int, char *[]) {
                     auto &store_instr = instr_node->store_instr;
                     fmt::println("[dst: %{}] [src: %{}]", std::to_underlying(store_instr.dst_node_id), std::to_underlying(store_instr.src_node_id));
                 } break;
-
                 case IR::NodeKind::eAdd:
                 case IR::NodeKind::eSub:
                 case IR::NodeKind::eMul:
@@ -559,10 +515,6 @@ int main(int, char *[]) {
                         std::to_underlying(loop_merge_instr.continuing_block_node_id)
                     );
                 } break;
-                case IR::NodeKind::eVariable: {
-                    auto &variable = instr_node->variable;
-                    fmt::println("  %{:<2} = OpVariable [type: %{}]", std::to_underlying(node_id), std::to_underlying(variable.type_node_id));
-                } break;
                 case IR::NodeKind::eMultiwayBranch: {
                     auto &multiway_branch = instr_node->multiway_branch_instr;
                     fmt::print("[default_block: %{}]", std::to_underlying(multiway_branch.default_block_node_id));
@@ -578,20 +530,93 @@ int main(int, char *[]) {
                         visitor(branch.target_block_id);
                     }
                 } break;
-                case IR::NodeKind::eFunctionCall:
+                case IR::NodeKind::eFunctionCall: {
+                    auto &function_call = instr_node->function_call_instr;
+                    fmt::print(
+                        "[callee: {}] [return_type: %{}]",
+                        std::to_underlying(function_call.callee_node_id),
+                        std::to_underlying(function_call.return_type_node_id)
+                    );
+
+                    for (auto param_node_id : function_call.param_node_ids) {
+                        fmt::print(" [param: %{}]", std::to_underlying(param_node_id));
+                    }
+
+                    fmt::println("");
+                } break;
+                case IR::NodeKind::eBasicBlock:
+                case IR::NodeKind::eVariable:
                 case IR::NodeKind::eType:
                 case IR::NodeKind::eConstant:
-                case IR::NodeKind::eBasicBlock:
                 case IR::NodeKind::eFunction:
                     break;
             }
         }
     };
 
-    for (const auto &[func, func_id] : std::views::zip(functions, std::views::iota(0_sz))) {
-        fmt::println("func_{}:", func_id);
+    auto function_ids = std::vector<IR::NodeID>();
+    for (const auto &[node, node_id] : std::views::zip(ir_module.nodes, std::views::iota(0_sz))) {
+        switch (node.kind) {
+            case IR::NodeKind::eType: {
+                auto &type = node.type;
+                fmt::println(
+                    " %{:<2} = OpType [kind: {}] [width: {}] [signed: {}]",
+                    node_id,
+                    instruction_type_kind_to_str(type.type_kind),
+                    type.width,
+                    type.is_signed
+                );
+            } break;
+            case IR::NodeKind::eConstant: {
+                auto &constant = node.constant;
+                auto *type_node = ir_module.get_node(constant.type_node_id);
+                auto &type = type_node->type;
+                auto value_str = std::string{};
+                switch (type.type_kind) {
+                    case IR::TypeKind::eInt: {
+                        switch (type.width) {
+                            case 8: {
+                                value_str = std::to_string(type.is_signed ? constant.i8_value : constant.u8_value);
+                            } break;
+                            case 16: {
+                                value_str = std::to_string(type.is_signed ? constant.i16_value : constant.u16_value);
+                            } break;
+                            case 32: {
+                                value_str = std::to_string(type.is_signed ? constant.i32_value : constant.u32_value);
+                            } break;
+                            case 64: {
+                                value_str = std::to_string(type.is_signed ? constant.i64_value : constant.u64_value);
+                            } break;
+                            default:;
+                        }
+                    } break;
+                    case IR::TypeKind::eFloat: {
+                    } break;
+                    default: {
+                        value_str = "0";
+                    } break;
+                }
 
-        visit_basic_block(func.first_basic_block_node_id);
+                fmt::println(" %{:<2} = OpConstant [type: %{}] [value: {}]", node_id, std::to_underlying(constant.type_node_id), value_str);
+            } break;
+            case IR::NodeKind::eVariable: {
+                auto &variable = node.variable;
+                fmt::println(" %{:<2} = OpVariable [type: %{}]", node_id, std::to_underlying(variable.type_node_id));
+            } break;
+            case IR::NodeKind::eFunction: {
+                function_ids.push_back(static_cast<IR::NodeID>(node_id));
+            } break;
+            default:;
+        }
+    }
+
+    for (auto function_id : function_ids) {
+        auto *function_node = ir_module.get_node(function_id);
+        auto &function = function_node->function;
+
+        fmt::println(" %{:<2} = OpFunction", std::to_underlying(function_id));
+        visit_basic_block(function.first_basic_block_node_id);
+        fmt::println("{:<6} OpFunctionEnd", "");
     }
 
     return 0;

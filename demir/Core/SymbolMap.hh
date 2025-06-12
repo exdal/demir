@@ -57,7 +57,7 @@ public:
 
     auto lookup(this SymbolMap &self, const KeyT &key) -> Option<ValueT> {
         auto looking_scope = self.current_scope;
-        while (looking_scope != 0) {
+        while (looking_scope != ~0_sz) {
             const auto &cur_stack = self.scopes[looking_scope];
             if (!cur_stack.empty()) {
                 auto &scope = cur_stack.back();
