@@ -544,8 +544,11 @@ int main(int, char *[]) {
 
                     fmt::println("");
                 } break;
+                case IR::NodeKind::eVariable: {
+                    auto &variable = instr_node->variable;
+                    fmt::println("[type: %{}]", std::to_underlying(variable.type_node_id));
+                } break;
                 case IR::NodeKind::eBasicBlock:
-                case IR::NodeKind::eVariable:
                 case IR::NodeKind::eType:
                 case IR::NodeKind::eConstant:
                 case IR::NodeKind::eFunction:
@@ -598,10 +601,6 @@ int main(int, char *[]) {
                 }
 
                 fmt::println(" %{:<2} = OpConstant [type: %{}] [value: {}]", node_id, std::to_underlying(constant.type_node_id), value_str);
-            } break;
-            case IR::NodeKind::eVariable: {
-                auto &variable = node.variable;
-                fmt::println(" %{:<2} = OpVariable [type: %{}]", node_id, std::to_underlying(variable.type_node_id));
             } break;
             case IR::NodeKind::eFunction: {
                 function_ids.push_back(static_cast<IR::NodeID>(node_id));

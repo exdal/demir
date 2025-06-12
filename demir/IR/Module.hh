@@ -10,7 +10,6 @@ namespace demir::IR {
 struct ModuleBuilder;
 struct BasicBlockBuilder {
     ModuleBuilder *module_builder = nullptr;
-    std::vector<NodeID> variable_node_ids = {};
     std::vector<NodeID> instr_node_ids = {};
     NodeID node_id = NodeID::Invalid;
 
@@ -29,7 +28,12 @@ struct BasicBlockBuilder {
     auto load_variable(this BasicBlockBuilder &, NodeID variable_node_id) -> NodeID;
     auto store_instr(this BasicBlockBuilder &, NodeID src_node_id, NodeID dst_node_id) -> void;
 
-    auto lower_variable(this BasicBlockBuilder &, std::string_view identifier, AST::ExpressionValueKind value_kind) -> NodeID;
+    auto lower_variable(
+        this BasicBlockBuilder &,
+        std::string_view identifier,
+        AST::ExpressionValueKind value_kind,
+        NodeID initializer_node_id = NodeID::Invalid
+    ) -> NodeID;
     auto lower_binary_op(this BasicBlockBuilder &, AST::BinaryOp op, NodeID lhs_node_id, NodeID rhs_node_id) -> NodeID;
     auto lower_expression(this BasicBlockBuilder &, AST::NodeID expression_node_id) -> NodeID;
 
@@ -53,7 +57,7 @@ struct ModuleBuilder : AST::StatementVisitor {
     std::vector<NodeID> type_node_ids = {};
     std::vector<NodeID> constant_node_ids = {};
 
-    Option<BasicBlockBuilder> block_builder = nullopt;
+    Option<BasicBlockBuilder> active_block_builder = nullopt;
 
     ModuleBuilder(BumpAllocator *allocator_, AST::Module *ast_module_) :
         AST::StatementVisitor(ast_module_),

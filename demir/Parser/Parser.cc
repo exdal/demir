@@ -365,8 +365,9 @@ auto Parser::parse_multi_statement(this Parser &self) -> AST::NodeID {
     }
     self.expect(self.next(), TokenKind::eBraceRight);
 
-    auto multi_statement = AST::MultiStatement{};
-    multi_statement.statement_ids = self.allocator->copy_into(Span(statement_ids));
+    auto multi_statement = AST::MultiStatement{
+        .statement_ids = self.allocator->copy_into(Span(statement_ids)),
+    };
 
     return self.make_node({ .multi_statement = multi_statement });
 }
@@ -447,10 +448,11 @@ auto Parser::parse_variable_decl_statement(this Parser &self) -> AST::NodeID {
 
     self.expect(self.next(), TokenKind::eSemiColon);
 
-    auto decl_var_statement = AST::DeclareVarStatement{};
-    decl_var_statement.identifier_str = identifier_str;
-    decl_var_statement.value_kind = value_kind;
-    decl_var_statement.initial_expression_id = initial_expression_id;
+    auto decl_var_statement = AST::DeclareVarStatement{
+        .identifier_str = identifier_str,
+        .value_kind = value_kind,
+        .initial_expression_id = initial_expression_id,
+    };
 
     return self.make_node({ .decl_var_statement = decl_var_statement });
 }
@@ -504,12 +506,13 @@ auto Parser::parse_function_decl_statement(this Parser &self, std::vector<AST::A
 
     auto body_statement = self.parse_statement();
 
-    auto decl_function_statement = AST::DeclareFunctionStatement{};
-    decl_function_statement.identifier_str = identifier_str;
-    decl_function_statement.parameters = self.allocator->copy_into(Span(params));
-    decl_function_statement.return_value_kind = return_type_kind;
-    decl_function_statement.body_statement_id = body_statement;
-    decl_function_statement.shader_kind = shader_kind;
+    auto decl_function_statement = AST::DeclareFunctionStatement{
+        .shader_kind = shader_kind,
+        .identifier_str = identifier_str,
+        .parameters = self.allocator->copy_into(Span(params)),
+        .return_value_kind = return_type_kind,
+        .body_statement_id = body_statement,
+    };
 
     return self.make_node({ .decl_function_statement = decl_function_statement });
 }
@@ -524,8 +527,9 @@ auto Parser::parse_return_statement(this Parser &self) -> AST::NodeID {
 
     self.expect(self.next(), TokenKind::eSemiColon);
 
-    auto return_statement = AST::ReturnStatement{};
-    return_statement.return_expression_id = return_type_expression_id;
+    auto return_statement = AST::ReturnStatement{
+        .return_expression_id = return_type_expression_id,
+    };
 
     return self.make_node({ .return_statement = return_statement });
 }
@@ -534,8 +538,9 @@ auto Parser::parse_expression_statement(this Parser &self) -> AST::NodeID {
     auto lhs_expression_id = self.parse_expression();
     self.expect(self.next(), TokenKind::eSemiColon);
 
-    auto expression_statement = AST::ExpressionStatement{};
-    expression_statement.expression_id = lhs_expression_id;
+    auto expression_statement = AST::ExpressionStatement{
+        .expression_id = lhs_expression_id,
+    };
 
     return self.make_node({ .expression_statement = expression_statement });
 }
@@ -545,9 +550,10 @@ auto Parser::parse_while_statement(this Parser &self) -> AST::NodeID {
     auto condition_expression_id = self.parse_expression();
     auto body_statement_id = self.parse_statement();
 
-    auto while_statement = AST::WhileStatement{};
-    while_statement.condition_expression_id = condition_expression_id;
-    while_statement.body_statement_id = body_statement_id;
+    auto while_statement = AST::WhileStatement{
+        .condition_expression_id = condition_expression_id,
+        .body_statement_id = body_statement_id,
+    };
 
     return self.make_node({ .while_statement = while_statement });
 }
@@ -580,9 +586,10 @@ auto Parser::parse_branch_statement(this Parser &self) -> AST::NodeID {
         false_case_statement_id = self.parse_statement();
     }
 
-    auto branch_statement = AST::BranchStatement{};
-    branch_statement.conditions = self.allocator->copy_into(Span(conditions));
-    branch_statement.false_case_statement_id = false_case_statement_id;
+    auto branch_statement = AST::BranchStatement{
+        .conditions = self.allocator->copy_into(Span(conditions)),
+        .false_case_statement_id = false_case_statement_id,
+    };
 
     return self.make_node({ .branch_statement = branch_statement });
 }
@@ -628,10 +635,11 @@ auto Parser::parse_multiway_branch_statement(this Parser &self) -> AST::NodeID {
 
     self.expect(self.next(), TokenKind::eBraceRight);
 
-    auto multiway_branch_statement = AST::MultiwayBranchStatement{};
-    multiway_branch_statement.selector_expression_id = condition_expression_id;
-    multiway_branch_statement.branches = self.allocator->copy_into(Span(branches));
-    multiway_branch_statement.default_statement_id = default_statement_id;
+    auto multiway_branch_statement = AST::MultiwayBranchStatement{
+        .selector_expression_id = condition_expression_id,
+        .default_statement_id = default_statement_id,
+        .branches = self.allocator->copy_into(Span(branches)),
+    };
 
     return self.make_node({ .multiway_branch_statement = multiway_branch_statement });
 }
@@ -674,10 +682,11 @@ auto Parser::parse_expression_with_precedence(this Parser &self, AST::Precedence
         }
 
         if (op_prec == AST::Precedence::eAssignment) {
-            auto assign_expression = AST::AssignExpression{};
-            assign_expression.assign_type = token_kind_to_assignment_type(op_kind).value();
-            assign_expression.lhs_expression_id = lhs_expression_id;
-            assign_expression.rhs_expression_id = rhs_expression_id;
+            auto assign_expression = AST::AssignExpression{
+                .assign_type = token_kind_to_assignment_type(op_kind).value(),
+                .lhs_expression_id = lhs_expression_id,
+                .rhs_expression_id = rhs_expression_id,
+            };
 
             expression_id = self.make_node({ .assign_expression = assign_expression });
         } else {
@@ -686,10 +695,11 @@ auto Parser::parse_expression_with_precedence(this Parser &self, AST::Precedence
                 throw ParserUnexpectedTokenError(op_loc);
             }
 
-            auto binary_op_expression = AST::BinaryExpression{};
-            binary_op_expression.op = binary_op.value();
-            binary_op_expression.lhs_expression_id = lhs_expression_id;
-            binary_op_expression.rhs_expression_id = rhs_expression_id;
+            auto binary_op_expression = AST::BinaryExpression{
+                .op = binary_op.value(),
+                .lhs_expression_id = lhs_expression_id,
+                .rhs_expression_id = rhs_expression_id,
+            };
 
             expression_id = self.make_node({ .binary_expression = binary_op_expression });
         }
@@ -742,8 +752,9 @@ auto Parser::parse_expression_list(this Parser &self, TokenKind terminator) -> s
 }
 
 auto Parser::parse_identifier_expression(this Parser &self) -> AST::NodeID {
-    auto identifier_expression = AST::IdentifierExpression{};
-    identifier_expression.identifier_str = self.parse_identifier_str();
+    auto identifier_expression = AST::IdentifierExpression{
+        .identifier_str = self.parse_identifier_str(),
+    };
 
     return self.make_node({ .identifier_expression = identifier_expression });
 }
@@ -781,8 +792,9 @@ auto Parser::parse_const_value_expression(this Parser &self) -> AST::NodeID {
         }
     }
 
-    auto const_decimal_expression = AST::ConstantValueExpression{};
-    const_decimal_expression.value = expr_value;
+    auto const_decimal_expression = AST::ConstantValueExpression{
+        .value = expr_value,
+    };
 
     return self.make_node({ .const_value_expression = const_decimal_expression });
 }
@@ -792,9 +804,10 @@ auto Parser::parse_call_function_expression(this Parser &self, AST::NodeID lhs_e
     auto expressions = self.parse_expression_list(TokenKind::eParenRight);
     self.expect(self.next(), TokenKind::eParenRight);
 
-    auto call_function_expression = AST::CallFunctionExpression{};
-    call_function_expression.function_expression_id = lhs_expression_id;
-    call_function_expression.parameter_expression_ids = self.allocator->copy_into(Span(expressions));
+    auto call_function_expression = AST::CallFunctionExpression{
+        .function_expression_id = lhs_expression_id,
+        .parameter_expression_ids = self.allocator->copy_into(Span(expressions)),
+    };
 
     return self.make_node({ .call_function_expression = call_function_expression });
 }

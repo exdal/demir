@@ -185,7 +185,6 @@ struct Variable {
 struct BasicBlock {
     NodeKind kind = NodeKind::eBasicBlock;
 
-    Span<NodeID> variable_ids = {};
     Span<NodeID> instruction_ids = {};
     NodeID terminator_node_id = NodeID::Invalid;
 };

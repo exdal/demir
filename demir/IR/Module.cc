@@ -71,7 +71,12 @@ auto BasicBlockBuilder::store_instr(this BasicBlockBuilder &self, NodeID src_nod
     self.make_instr({ .store_instr = store_instr });
 }
 
-auto BasicBlockBuilder::lower_variable(this BasicBlockBuilder &self, std::string_view identifier, AST::ExpressionValueKind value_kind) -> NodeID {
+auto BasicBlockBuilder::lower_variable(
+    this BasicBlockBuilder &self,
+    std::string_view identifier,
+    AST::ExpressionValueKind value_kind,
+    NodeID initializer_node_id
+) -> NodeID {
     auto type_node_id = NodeID::Invalid;
     if (value_kind != AST::ExpressionValueKind::eNone) {
         type_node_id = self.module_builder->lower_type(value_kind);
@@ -83,9 +88,12 @@ auto BasicBlockBuilder::lower_variable(this BasicBlockBuilder &self, std::string
     auto variable = Variable{
         .type_node_id = type_node_id,
     };
-    auto variable_node_id = self.module_builder->make_node({ .variable = variable });
-    self.variable_node_ids.push_back(variable_node_id);
+    auto variable_node_id = self.make_instr({ .variable = variable });
     self.module_builder->symbols.add_symbol(identifier, variable_node_id);
+
+    if (initializer_node_id != NodeID::Invalid) {
+        self.store_instr(initializer_node_id, variable_node_id);
+    }
 
     return variable_node_id;
 }
@@ -283,7 +291,7 @@ auto BasicBlockBuilder::lower_function_call_expression(this BasicBlockBuilder &s
         .param_node_ids = self.module_builder->allocator->copy_into(Span(parameter_node_ids)),
     };
 
-    return self.make_instr({.function_call_instr = function_call_instr});
+    return self.make_instr({ .function_call_instr = function_call_instr });
 }
 
 //  ── MODULE BUILDER ──────────────────────────────────────────────────
@@ -326,23 +334,22 @@ auto ModuleBuilder::end_block_builder(this ModuleBuilder &self, BasicBlockBuilde
     auto &basic_block = node->basic_block;
 
     basic_block.instruction_ids = self.allocator->copy_into(Span(basic_block_builder.instr_node_ids));
-    basic_block.variable_ids = self.allocator->copy_into(Span(basic_block_builder.variable_node_ids));
 
     return basic_block_builder.node_id;
 }
 
 auto ModuleBuilder::release_block_builder(this ModuleBuilder &self, BasicBlockBuilder &&basic_block_builder) -> void {
-    self.block_builder.emplace(std::move(basic_block_builder));
+    self.active_block_builder.emplace(std::move(basic_block_builder));
 }
 
 auto ModuleBuilder::acquire_block_builder(this ModuleBuilder &self) -> BasicBlockBuilder {
-    if (!self.block_builder.has_value()) {
+    if (!self.active_block_builder.has_value()) {
         auto new_basic_block_builder = self.make_block_builder();
         self.release_block_builder(std::move(new_basic_block_builder));
     }
 
-    auto block_builder = std::move(self.block_builder).value();
-    self.block_builder.reset();
+    auto block_builder = std::move(self.active_block_builder).value();
+    self.active_block_builder.reset();
 
     return block_builder;
 }
@@ -470,11 +477,15 @@ auto ModuleBuilder::visit(AST::MultiStatement &statement) -> void {
 }
 
 auto ModuleBuilder::visit(AST::DeclareVarStatement &statement) -> void {
-    auto variable_node_id = block_builder->lower_variable(statement.identifier_str, statement.value_kind);
+    auto block_builder = this->acquire_block_builder();
+
+    auto initializer_node_id = NodeID::Invalid;
     if (statement.initial_expression_id != AST::NodeID::Invalid) {
-        auto initializer_node_id = block_builder->lower_expression(statement.initial_expression_id);
-        block_builder->store_instr(initializer_node_id, variable_node_id);
+        initializer_node_id = block_builder.lower_expression(statement.initial_expression_id);
     }
+    block_builder.lower_variable(statement.identifier_str, statement.value_kind, initializer_node_id);
+
+    this->release_block_builder(std::move(block_builder));
 }
 
 auto ModuleBuilder::visit(AST::DeclareFunctionStatement &statement) -> void {
@@ -485,18 +496,22 @@ auto ModuleBuilder::visit(AST::DeclareFunctionStatement &statement) -> void {
     }
 
     auto return_type_node_id = this->lower_type(statement.return_value_kind);
-    auto basic_block_builder = this->make_block_builder();
+    auto block_builder = this->make_block_builder();
     auto function = Function{
         .parameter_type_node_ids = this->allocator->copy_into(Span(param_type_node_ids)),
         .return_type_node_id = return_type_node_id,
-        .first_basic_block_node_id = basic_block_builder.node_id,
+        .first_basic_block_node_id = block_builder.node_id,
     };
     auto func_node_id = this->make_node({ .function = function });
     this->symbols.add_symbol(statement.identifier_str, func_node_id);
     this->symbols.push_scope();
 
     //  ── FUNCTION BODY ───────────────────────────────────────────────────
-    this->release_block_builder(std::move(basic_block_builder));
+    for (const auto &param : statement.parameters) {
+        block_builder.lower_variable(param.identifier_str, param.value_kind);
+    }
+
+    this->release_block_builder(std::move(block_builder));
     this->visit(statement.body_statement_id);
 
     //  ── FUNCTION FOOTER ─────────────────────────────────────────────────
