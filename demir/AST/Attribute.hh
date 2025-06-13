@@ -9,6 +9,7 @@ enum class AttributeKind : u32 {
     eShader, // args: "shader_kind"
     eBuiltin, // args: "builtin_kind"
     eThreads, // args: vec3u(x, y, z)
+    eLayout, // args: "layout_kind"
 };
 
 enum class ShaderKind : u32 {
@@ -29,6 +30,12 @@ enum class BuiltinKind : u32 {
     eLocalInvocationIndex,
 };
 
+enum class LayoutKind : u32 {
+    eScalar = 0,
+    eStd140,
+    eStd430,
+};
+
 struct Attribute {
     AttributeKind kind = AttributeKind::eNone;
     Location location = {};
@@ -36,6 +43,7 @@ struct Attribute {
         ShaderKind shader_kind = ShaderKind::eNone;
         BuiltinKind builtin_kind;
         // TODO: Threads
+        LayoutKind layout_kind;
     };
 };
 

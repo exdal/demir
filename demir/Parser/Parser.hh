@@ -44,6 +44,7 @@ private:
     auto parse_while_statement(this Parser &) -> AST::NodeID;
     auto parse_branch_statement(this Parser &) -> AST::NodeID;
     auto parse_multiway_branch_statement(this Parser &) -> AST::NodeID;
+    auto parse_struct_decl_statement(this Parser &, std::vector<AST::Attribute> &&attributes = {}) -> AST::NodeID;
 
     auto parse_expression(this Parser &, AST::Precedence precedence = AST::Precedence::eComma) -> AST::NodeID;
     auto parse_expression_with_precedence(this Parser &, AST::Precedence precedence, AST::NodeID lhs_expression_id) -> AST::NodeID;

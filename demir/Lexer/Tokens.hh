@@ -48,10 +48,12 @@ KEYWORD(i64, "i64")
 KEYWORD(u64, "u64")
 KEYWORD(f32, "f32")
 KEYWORD(f64, "f64")
+KEYWORD(Struct, "struct")
 
 ATTRIBUTE(Builtin, "builtin")
 ATTRIBUTE(Shader, "shader")
 ATTRIBUTE(Threads, "threads")
+ATTRIBUTE(Layout, "layout")
 
 PUNCTUATOR(Equal, "=")
 PUNCTUATOR(Add, "+")

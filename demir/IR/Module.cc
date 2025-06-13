@@ -279,9 +279,9 @@ auto BasicBlockBuilder::lower_binary_op_expression(this BasicBlockBuilder &self,
 }
 
 auto BasicBlockBuilder::lower_function_call_expression(this BasicBlockBuilder &self, AST::CallFunctionExpression &expression) -> NodeID {
-    auto callee_node_id = self.lower_expression(expression.function_expression_id);
+    auto callee_node_id = self.lower_expression(expression.callee_expression_id);
     if (callee_node_id == NodeID::Invalid) {
-        auto *node = self.module_builder->ast_module->get_node(expression.function_expression_id);
+        auto *node = self.module_builder->ast_module->get_node(expression.callee_expression_id);
         DEMIR_EXPECT(node->kind == AST::NodeKind::eIdentifierExpression);
         auto &identifier_expr = node->identifier_expression;
         callee_node_id = self.module_builder->reserve_function(identifier_expr.identifier_str);
@@ -773,6 +773,8 @@ auto ModuleBuilder::visit(AST::ContinueStatement &) -> void {
     block_builder.terminate_branch(begin_marker_node_id);
     this->end_block_builder(std::move(block_builder));
 }
+
+auto ModuleBuilder::visit(AST::DeclareStructStatement &statement) -> void {}
 
 //  ── MODULE ──────────────────────────────────────────────────────────
 

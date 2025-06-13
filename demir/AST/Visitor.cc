@@ -57,6 +57,9 @@ auto Visitor::visit(NodeID node_id) -> void {
         case NodeKind::eContinueStatement: {
             visit(node->continue_statement);
         } break;
+        case NodeKind::eDeclareStructStatement: {
+            visit(node->decl_struct_statement);
+        } break;
         case NodeKind::eNone:;
     }
 }
@@ -99,6 +102,9 @@ auto StatementVisitor::visit(NodeID node_id) -> void {
         } break;
         case NodeKind::eContinueStatement: {
             visit(node->continue_statement);
+        } break;
+        case NodeKind::eDeclareStructStatement: {
+            visit(node->decl_struct_statement);
         } break;
         case NodeKind::eIdentifierExpression:
         case NodeKind::eConstantValueExpression:

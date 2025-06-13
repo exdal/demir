@@ -281,7 +281,7 @@ struct PrinterVisitor : AST::Visitor {
     auto visit(AST::CallFunctionExpression &v) -> void override {
         print_indented("Call function expression:");
         push();
-        visit(v.function_expression_id);
+        visit(v.callee_expression_id);
 
         push();
         print_indented("Parameter expressions:");
@@ -402,6 +402,20 @@ struct PrinterVisitor : AST::Visitor {
 
     auto visit(AST::ContinueStatement &) -> void override {
         print_indented("Continue statement");
+    }
+
+    auto visit(AST::DeclareStructStatement &v) -> void override {
+        print_indented("Declare struct statement:");
+        push();
+        print_indented("Identifier: {}", v.identifier_str);
+        print_indented("Fields:");
+        push();
+        for (const auto &[field, i] : std::views::zip(v.fields, std::views::iota(0_sz))) {
+            print_indented("- Field identifier: {}", field.identifier_str);
+            print_indented("{:<2}Field type: {}", "", expression_value_kind_to_str(field.value_kind));
+        }
+        pop();
+        pop();
     }
 };
 

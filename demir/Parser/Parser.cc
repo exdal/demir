@@ -132,7 +132,59 @@ auto attribute_kind_to_string(AST::AttributeKind kind) -> std::string_view {
             return "builtin";
         case AST::AttributeKind::eThreads:
             return "threads";
+        case AST::AttributeKind::eLayout:
+            return "layout";
     }
+}
+
+auto str_to_builtin_kind(std::string_view str) -> Option<AST::BuiltinKind> {
+    switch (fnv64(str)) {
+        case fnv64_c("primitive_index"):
+            return AST::BuiltinKind::ePrimitiveIndex;
+        case fnv64_c("instance_index"):
+            return AST::BuiltinKind::eInstanceIndex;
+        case fnv64_c("vertex_index"):
+            return AST::BuiltinKind::eVertexIndex;
+        case fnv64_c("global_invocation_id"):
+            return AST::BuiltinKind::eGlobalInvocationID;
+        case fnv64_c("local_invocation_id"):
+            return AST::BuiltinKind::eLocalInvocationID;
+        case fnv64_c("work_group_id"):
+            return AST::BuiltinKind::eWorkGroupID;
+        case fnv64_c("local_invocation_index"):
+            return AST::BuiltinKind::eLocalInvocationIndex;
+        default:;
+    }
+
+    return nullopt;
+}
+
+auto str_to_shader_kind(std::string_view str) -> Option<AST::ShaderKind> {
+    switch (fnv64(str)) {
+        case fnv64_c("vertex"):
+            return AST::ShaderKind::eVertex;
+        case fnv64_c("fragment"):
+            return AST::ShaderKind::eFragment;
+        case fnv64_c("compute"):
+            return AST::ShaderKind::eCompute;
+        default:;
+    }
+
+    return nullopt;
+}
+
+auto str_to_layout_kind(std::string_view str) -> Option<AST::LayoutKind> {
+    switch (fnv64(str)) {
+        case fnv64_c("scalar"):
+            return AST::LayoutKind::eScalar;
+        case fnv64_c("std140"):
+            return AST::LayoutKind::eStd140;
+        case fnv64_c("std430"):
+            return AST::LayoutKind::eStd430;
+        default:;
+    }
+
+    return nullopt;
 }
 
 auto Parser::parse(BumpAllocator *allocator, std::string_view source) -> ParserResult {
@@ -260,77 +312,63 @@ auto Parser::parse_attributes(this Parser &self) -> std::vector<AST::Attribute> 
             self.expect(self.next(), TokenKind::eComma);
         }
 
-        const auto &attrib_token = self.peek();
-        self.next();
+        const auto &attrib_token = self.next();
+        self.expect(self.next(), TokenKind::eParenLeft);
         switch (attrib_token.kind) {
             case TokenKind::eBuiltin: {
-                self.expect(self.next(), TokenKind::eParenLeft);
                 const auto &string_token = self.expect(self.next(), TokenKind::eStringLiteral);
                 auto builtin_kind_str = string_token.string(self.source);
-                auto builtin_kind = AST::BuiltinKind::eVertexIndex;
-                switch (fnv64(builtin_kind_str)) {
-                    case fnv64_c("primitive_index"): {
-                        builtin_kind = AST::BuiltinKind::ePrimitiveIndex;
-                    } break;
-                    case fnv64_c("instance_index"): {
-                        builtin_kind = AST::BuiltinKind::eInstanceIndex;
-                    } break;
-                    case fnv64_c("vertex_index"): {
-                        builtin_kind = AST::BuiltinKind::eVertexIndex;
-                    } break;
-                    case fnv64_c("global_invocation_id"): {
-                        builtin_kind = AST::BuiltinKind::eGlobalInvocationID;
-                    } break;
-                    case fnv64_c("local_invocation_id"): {
-                        builtin_kind = AST::BuiltinKind::eLocalInvocationID;
-                    } break;
-                    case fnv64_c("work_group_id"): {
-                        builtin_kind = AST::BuiltinKind::eWorkGroupID;
-                    } break;
-                    case fnv64_c("local_invocation_index"): {
-                        builtin_kind = AST::BuiltinKind::eLocalInvocationIndex;
-                    } break;
-                    default: {
-                        throw ParserUnexpectedTokenError(string_token.location);
-                    }
+                auto builtin_kind = str_to_builtin_kind(builtin_kind_str);
+                if (!builtin_kind.has_value()) {
+                    throw ParserUnexpectedAttributeError(string_token.location);
                 }
 
-                attributes.push_back({ .kind = AST::AttributeKind::eBuiltin, .location = attrib_token.location, .builtin_kind = builtin_kind });
-
-                self.expect(self.next(), TokenKind::eParenRight);
+                auto attribute = AST::Attribute{
+                    .kind = AST::AttributeKind::eBuiltin,
+                    .location = attrib_token.location,
+                    .builtin_kind = builtin_kind.value(),
+                };
+                attributes.push_back(attribute);
             } break;
             case TokenKind::eShader: {
-                self.expect(self.next(), TokenKind::eParenLeft);
                 const auto &string_token = self.expect(self.next(), TokenKind::eStringLiteral);
                 auto shader_kind_str = string_token.string(self.source);
-                auto shader_kind = AST::ShaderKind::eNone;
-
-                switch (fnv64(shader_kind_str)) {
-                    case fnv64_c("vertex"): {
-                        shader_kind = AST::ShaderKind::eVertex;
-                    } break;
-                    case fnv64_c("fragment"): {
-                        shader_kind = AST::ShaderKind::eFragment;
-                    } break;
-                    case fnv64_c("compute"): {
-                        shader_kind = AST::ShaderKind::eCompute;
-                    } break;
-                    default: {
-                        throw ParserUnexpectedAttributeError(string_token.location, shader_kind_str);
-                    }
+                auto shader_kind = str_to_shader_kind(shader_kind_str);
+                if (!shader_kind.has_value()) {
+                    throw ParserUnexpectedAttributeError(string_token.location);
                 }
 
-                attributes.push_back({ .kind = AST::AttributeKind::eShader, .location = attrib_token.location, .shader_kind = shader_kind });
-
-                self.expect(self.next(), TokenKind::eParenRight);
+                auto attribute = AST::Attribute{
+                    .kind = AST::AttributeKind::eShader,
+                    .location = attrib_token.location,
+                    .shader_kind = shader_kind.value(),
+                };
+                attributes.push_back(attribute);
             } break;
             case TokenKind::eThreads: {
+                // TODO: Threads
+            } break;
+            case TokenKind::eLayout: {
+                const auto &string_token = self.expect(self.next(), TokenKind::eStringLiteral);
+                auto layout_kind_str = string_token.string(self.source);
+                auto layout_kind = str_to_layout_kind(layout_kind_str);
+                if (!layout_kind.has_value()) {
+                    throw ParserUnexpectedAttributeError(attrib_token.location);
+                }
+
+                auto attribute = AST::Attribute{
+                    .kind = AST::AttributeKind::eLayout,
+                    .location = attrib_token.location,
+                    .layout_kind = layout_kind.value(),
+                };
+                attributes.push_back(attribute);
             } break;
             default: {
-                throw ParserUnexpectedTokenError(attrib_token.location);
+                throw ParserUnexpectedAttributeError(attrib_token.location, attrib_token.string(self.source));
             }
         }
 
+        self.expect(self.next(), TokenKind::eParenRight);
         is_first = false;
     }
 
@@ -400,6 +438,9 @@ auto Parser::parse_single_statement(this Parser &self) -> AST::NodeID {
             }
             case TokenKind::eMatch: {
                 return self.parse_multiway_branch_statement();
+            }
+            case TokenKind::eStruct: {
+                return self.parse_struct_decl_statement();
             }
             case TokenKind::eBreak: {
                 self.next();
@@ -644,6 +685,41 @@ auto Parser::parse_multiway_branch_statement(this Parser &self) -> AST::NodeID {
     return self.make_node({ .multiway_branch_statement = multiway_branch_statement });
 }
 
+auto Parser::parse_struct_decl_statement(this Parser &self, std::vector<AST::Attribute> &&attributes) -> AST::NodeID {
+    self.expect(self.next(), TokenKind::eStruct);
+    auto identifier_str = self.parse_identifier_str();
+
+    self.expect(self.next(), TokenKind::eBraceLeft);
+    auto fields = std::vector<AST::DeclareStructStatement::Field>();
+    auto first_field = true;
+    while (!self.peek().is(TokenKind::eEof)) {
+        if (self.peek().is(TokenKind::eBraceRight)) {
+            break;
+        }
+
+        if (!first_field) {
+            self.expect(self.next(), TokenKind::eComma);
+        }
+
+        auto field_identifier_str = self.parse_identifier_str();
+        self.expect(self.next(), TokenKind::eColon);
+        auto field_type_kind = self.parse_intrinsic_type();
+        self.next();
+
+        fields.push_back({ .identifier_str = field_identifier_str, .value_kind = field_type_kind });
+        first_field = false;
+    }
+
+    self.expect(self.next(), TokenKind::eBraceRight);
+
+    auto decl_struct_statement = AST::DeclareStructStatement{
+        .identifier_str = identifier_str,
+        .fields = self.allocator->copy_into(Span(fields)),
+    };
+
+    return self.make_node({ .decl_struct_statement = decl_struct_statement });
+}
+
 auto Parser::parse_expression(this Parser &self, AST::Precedence precedence) -> AST::NodeID {
     auto lhs_expression_id = self.parse_primary_expression();
     if (self.peek().is(TokenKind::eParenLeft)) {
@@ -805,7 +881,7 @@ auto Parser::parse_call_function_expression(this Parser &self, AST::NodeID lhs_e
     self.expect(self.next(), TokenKind::eParenRight);
 
     auto call_function_expression = AST::CallFunctionExpression{
-        .function_expression_id = lhs_expression_id,
+        .callee_expression_id = lhs_expression_id,
         .parameter_expression_ids = self.allocator->copy_into(Span(expressions)),
     };
 

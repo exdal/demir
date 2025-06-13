@@ -47,6 +47,7 @@ enum class NodeKind : u32 {
     eMultiwayBranchStatement,
     eBreakStatement,
     eContinueStatement,
+    eDeclareStructStatement,
 };
 
 enum struct NodeID : u32 { Invalid = ~0_u32 };
@@ -118,7 +119,7 @@ struct BinaryExpression {
 struct CallFunctionExpression {
     NodeKind kind = NodeKind::eCallFunctionExpression;
 
-    NodeID function_expression_id = NodeID::Invalid;
+    NodeID callee_expression_id = NodeID::Invalid;
     Span<NodeID> parameter_expression_ids = {};
 };
 
@@ -206,6 +207,18 @@ struct ContinueStatement {
     NodeKind kind = NodeKind::eContinueStatement;
 };
 
+struct DeclareStructStatement {
+    struct Field {
+        std::string_view identifier_str = {};
+        ExpressionValueKind value_kind = ExpressionValueKind::eNone;
+    };
+
+    NodeKind kind = NodeKind::eDeclareStructStatement;
+
+    std::string_view identifier_str = {};
+    Span<Field> fields = {};
+};
+
 union Node {
     NodeKind kind = NodeKind::eNone;
 
@@ -227,5 +240,6 @@ union Node {
     MultiwayBranchStatement multiway_branch_statement;
     BreakStatement break_statement;
     ContinueStatement continue_statement;
+    DeclareStructStatement decl_struct_statement;
 };
 } // namespace demir::AST

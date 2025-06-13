@@ -97,6 +97,7 @@ struct ModuleBuilder : AST::StatementVisitor {
     auto visit(AST::MultiwayBranchStatement &) -> void override;
     auto visit(AST::BreakStatement &) -> void override;
     auto visit(AST::ContinueStatement &) -> void override;
+    auto visit(AST::DeclareStructStatement &) -> void override;
 };
 
 struct Module {

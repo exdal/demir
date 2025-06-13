@@ -27,6 +27,7 @@ struct Visitor {
     virtual auto visit(MultiwayBranchStatement &) -> void = 0;
     virtual auto visit(BreakStatement &) -> void = 0;
     virtual auto visit(ContinueStatement &) -> void = 0;
+    virtual auto visit(DeclareStructStatement &) -> void = 0;
 };
 
 struct StatementVisitor {
@@ -46,6 +47,7 @@ struct StatementVisitor {
     virtual auto visit(MultiwayBranchStatement &) -> void = 0;
     virtual auto visit(BreakStatement &) -> void = 0;
     virtual auto visit(ContinueStatement &) -> void = 0;
+    virtual auto visit(DeclareStructStatement &) -> void = 0;
 };
 
 } // namespace demir::AST

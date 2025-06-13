@@ -36,7 +36,7 @@ auto Module::get_underlying_expression_value(this Module &self, NodeID node_id) 
             return self.get_underlying_expression_value(node->binary_expression.rhs_expression_id);
         }
         case NodeKind::eCallFunctionExpression: {
-            return self.get_underlying_expression_value(node->call_function_expression.function_expression_id);
+            return self.get_underlying_expression_value(node->call_function_expression.callee_expression_id);
         }
         default:;
     }
