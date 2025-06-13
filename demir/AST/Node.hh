@@ -215,6 +215,7 @@ struct DeclareStructStatement {
 
     NodeKind kind = NodeKind::eDeclareStructStatement;
 
+    LayoutKind layout = LayoutKind::eScalar;
     std::string_view identifier_str = {};
     Span<Field> fields = {};
 };

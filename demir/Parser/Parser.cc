@@ -712,7 +712,18 @@ auto Parser::parse_struct_decl_statement(this Parser &self, std::vector<AST::Att
 
     self.expect(self.next(), TokenKind::eBraceRight);
 
+    auto layout = AST::LayoutKind::eScalar;
+    for (const auto &attribute : attributes) {
+        switch (attribute.kind) {
+            case AST::AttributeKind::eLayout: {
+                layout = attribute.layout_kind;
+            } break;
+            default:;
+        }
+    }
+
     auto decl_struct_statement = AST::DeclareStructStatement{
+        .layout = layout,
         .identifier_str = identifier_str,
         .fields = self.allocator->copy_into(Span(fields)),
     };
