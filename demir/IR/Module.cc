@@ -214,6 +214,10 @@ auto BasicBlockBuilder::lower_expression(this BasicBlockBuilder &self, AST::Node
 
 auto BasicBlockBuilder::lower_identifier_expression(this BasicBlockBuilder &self, AST::IdentifierExpression &expression) -> NodeID {
     auto node_id = self.module_builder->lookup_identifier(expression.identifier_str);
+    if (node_id == NodeID::Invalid) {
+        return NodeID::Invalid;
+    }
+
     auto *node = self.module_builder->get_node(node_id);
     switch (node->kind) {
         case NodeKind::eVariable: {
@@ -276,8 +280,12 @@ auto BasicBlockBuilder::lower_binary_op_expression(this BasicBlockBuilder &self,
 
 auto BasicBlockBuilder::lower_function_call_expression(this BasicBlockBuilder &self, AST::CallFunctionExpression &expression) -> NodeID {
     auto callee_node_id = self.lower_expression(expression.function_expression_id);
-    auto *callee_node = self.module_builder->get_node(callee_node_id);
-    auto &callee = callee_node->function;
+    if (callee_node_id == NodeID::Invalid) {
+        auto *node = self.module_builder->ast_module->get_node(expression.function_expression_id);
+        DEMIR_EXPECT(node->kind == AST::NodeKind::eIdentifierExpression);
+        auto &identifier_expr = node->identifier_expression;
+        callee_node_id = self.module_builder->reserve_function(identifier_expr.identifier_str);
+    }
 
     auto parameter_node_ids = std::vector<NodeID>();
     for (auto param_expression_id : expression.parameter_expression_ids) {
@@ -286,7 +294,6 @@ auto BasicBlockBuilder::lower_function_call_expression(this BasicBlockBuilder &s
     }
 
     auto function_call_instr = FunctionCallInstruction{
-        .return_type_node_id = callee.return_type_node_id,
         .callee_node_id = callee_node_id,
         .param_node_ids = self.module_builder->allocator->copy_into(Span(parameter_node_ids)),
     };
@@ -365,6 +372,13 @@ auto ModuleBuilder::pop_scope(this ModuleBuilder &self) -> void {
 auto ModuleBuilder::lookup_identifier(this ModuleBuilder &self, std::string_view identifier_str) -> NodeID {
     auto var_node_id = self.symbols.lookup(identifier_str);
     return var_node_id.value_or(NodeID::Invalid);
+}
+
+auto ModuleBuilder::reserve_function(this ModuleBuilder &self, std::string_view identifier_str) -> NodeID {
+    auto node_id = self.make_node({ .function = {} });
+    self.symbols.add_symbol(identifier_str, node_id, 0_sz);
+
+    return node_id;
 }
 
 auto ModuleBuilder::lower_type(this ModuleBuilder &self, const Type &type) -> NodeID {
@@ -497,16 +511,28 @@ auto ModuleBuilder::visit(AST::DeclareFunctionStatement &statement) -> void {
 
     auto return_type_node_id = this->lower_type(statement.return_value_kind);
     auto block_builder = this->make_block_builder();
-    auto function = Function{
-        .parameter_type_node_ids = this->allocator->copy_into(Span(param_type_node_ids)),
-        .return_type_node_id = return_type_node_id,
-        .first_basic_block_node_id = block_builder.node_id,
-    };
-    auto func_node_id = this->make_node({ .function = function });
-    this->symbols.add_symbol(statement.identifier_str, func_node_id);
-    this->symbols.push_scope();
+    auto func_node_id = NodeID::Invalid;
+    auto reserved_func_node_id = this->symbols.lookup(statement.identifier_str, 0_sz);
+    if (reserved_func_node_id.has_value()) {
+        auto *reserve_func_node = this->get_node(reserved_func_node_id.value());
+        auto &reserved_func = reserve_func_node->function;
+        reserved_func.parameter_type_node_ids = this->allocator->copy_into(Span(param_type_node_ids));
+        reserved_func.return_type_node_id = return_type_node_id;
+        reserved_func.first_basic_block_node_id = block_builder.node_id;
+
+        func_node_id = reserved_func_node_id.value();
+    } else {
+        auto function = Function{
+            .parameter_type_node_ids = this->allocator->copy_into(Span(param_type_node_ids)),
+            .return_type_node_id = return_type_node_id,
+            .first_basic_block_node_id = block_builder.node_id,
+        };
+        func_node_id = this->make_node({ .function = function });
+        this->symbols.add_symbol(statement.identifier_str, func_node_id, 0_sz);
+    }
 
     //  ── FUNCTION BODY ───────────────────────────────────────────────────
+    this->symbols.push_scope();
     for (const auto &param : statement.parameters) {
         block_builder.lower_variable(param.identifier_str, param.value_kind);
     }

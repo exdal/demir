@@ -532,11 +532,7 @@ int main(int, char *[]) {
                 } break;
                 case IR::NodeKind::eFunctionCall: {
                     auto &function_call = instr_node->function_call_instr;
-                    fmt::print(
-                        "[callee: {}] [return_type: %{}]",
-                        std::to_underlying(function_call.callee_node_id),
-                        std::to_underlying(function_call.return_type_node_id)
-                    );
+                    fmt::print("[callee: {}]", std::to_underlying(function_call.callee_node_id));
 
                     for (auto param_node_id : function_call.param_node_ids) {
                         fmt::print(" [param: %{}]", std::to_underlying(param_node_id));

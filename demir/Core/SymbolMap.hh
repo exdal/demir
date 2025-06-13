@@ -49,14 +49,14 @@ public:
         self.current_scope -= 1;
     }
 
-    auto add_symbol(this SymbolMap &self, const KeyT &key, const ValueT &value) -> void {
-        auto &cur_scope = self.scopes[self.current_scope];
+    auto add_symbol(this SymbolMap &self, const KeyT &key, const ValueT &value, const Option<usize> &target_scope = nullopt) -> void {
+        auto &cur_scope = self.scopes[target_scope.value_or(self.current_scope)];
         auto &cur_stack = cur_scope.back();
         cur_stack.map[key] = value;
     }
 
-    auto lookup(this SymbolMap &self, const KeyT &key) -> Option<ValueT> {
-        auto looking_scope = self.current_scope;
+    auto lookup(this SymbolMap &self, const KeyT &key, const Option<usize> &target_scope = nullopt) -> Option<ValueT> {
+        auto looking_scope = target_scope.value_or(self.current_scope);
         while (looking_scope != ~0_sz) {
             const auto &cur_stack = self.scopes[looking_scope];
             if (!cur_stack.empty()) {

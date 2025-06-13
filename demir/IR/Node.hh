@@ -138,7 +138,6 @@ using LessThanEqualInstruction = HandedInstruction<NodeKind::eLessThanEqual>;
 struct FunctionCallInstruction  {
     NodeKind kind = NodeKind::eFunctionCall;
 
-    NodeID return_type_node_id = NodeID::Invalid;
     NodeID callee_node_id = NodeID::Invalid;
     Span<NodeID> param_node_ids = {};
 };

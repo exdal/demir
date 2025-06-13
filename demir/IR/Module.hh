@@ -80,6 +80,7 @@ struct ModuleBuilder : AST::StatementVisitor {
     auto pop_scope(this ModuleBuilder &) -> void;
 
     auto lookup_identifier(this ModuleBuilder &, std::string_view identifier_str) -> NodeID;
+    auto reserve_function(this ModuleBuilder &, std::string_view identifier_str) -> NodeID;
 
     auto lower_type(this ModuleBuilder &, const Type &type) -> NodeID;
     auto lower_type(this ModuleBuilder &, AST::ExpressionValueKind value_kind) -> NodeID;
