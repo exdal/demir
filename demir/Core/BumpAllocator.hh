@@ -1,6 +1,5 @@
 #pragma once
 
-#include "demir/Core/Types.hh"
 #include "demir/Core/Span.hh"
 
 #include <string_view>

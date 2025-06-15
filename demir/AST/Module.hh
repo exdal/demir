@@ -14,7 +14,7 @@ struct Module {
     Module(std::vector<Node> nodes_, NodeID root_node_id_) : nodes(std::move(nodes_)), root_node_id(root_node_id_) {}
 
     auto get_node(this Module &, NodeID node_id) -> Node *;
-    auto get_underlying_expression_value(this Module &, NodeID node_id) -> Option<ExpressionValue>;
+    auto get_underlying_value(this Module &, NodeID node_id) -> Option<Value>;
 };
 
 } // namespace demir::AST

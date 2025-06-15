@@ -20,7 +20,7 @@ struct BasicBlockBuilder {
 
     auto terminate_branch(this BasicBlockBuilder &, BasicBlockBuilder &branching_block) -> void;
     auto terminate_branch(this BasicBlockBuilder &, NodeID branching_block_id) -> void;
-    auto terminate_return(this BasicBlockBuilder &, AST::ExpressionValueKind value_kind) -> void;
+    auto terminate_return(this BasicBlockBuilder &, ValueKind value_kind) -> void;
 
     auto make_instr(const Node &node) -> NodeID;
 
@@ -28,12 +28,7 @@ struct BasicBlockBuilder {
     auto load_variable(this BasicBlockBuilder &, NodeID variable_node_id) -> NodeID;
     auto store_instr(this BasicBlockBuilder &, NodeID src_node_id, NodeID dst_node_id) -> void;
 
-    auto lower_variable(
-        this BasicBlockBuilder &,
-        std::string_view identifier,
-        AST::ExpressionValueKind value_kind,
-        NodeID initializer_node_id = NodeID::Invalid
-    ) -> NodeID;
+    auto lower_variable(this BasicBlockBuilder &, std::string_view identifier, ValueKind value_kind, NodeID initializer_node_id = NodeID::Invalid) -> NodeID;
     auto lower_binary_op(this BasicBlockBuilder &, AST::BinaryOp op, NodeID lhs_node_id, NodeID rhs_node_id) -> NodeID;
     auto lower_expression(this BasicBlockBuilder &, AST::NodeID expression_node_id) -> NodeID;
 
@@ -56,13 +51,11 @@ struct ModuleBuilder : AST::StatementVisitor {
 
     std::vector<NodeID> type_node_ids = {};
     std::vector<NodeID> constant_node_ids = {};
+    std::vector<NodeID> decoration_node_ids = {};
 
     Option<BasicBlockBuilder> active_block_builder = nullopt;
 
-    ModuleBuilder(BumpAllocator *allocator_, AST::Module *ast_module_) :
-        AST::StatementVisitor(ast_module_),
-        allocator(allocator_),
-        ast_module(ast_module_) {};
+    ModuleBuilder(BumpAllocator *allocator_, AST::Module *ast_module_) : AST::StatementVisitor(ast_module_), allocator(allocator_), ast_module(ast_module_) {};
 
     auto build(this ModuleBuilder &) -> Module;
 
@@ -81,9 +74,11 @@ struct ModuleBuilder : AST::StatementVisitor {
 
     auto lookup_identifier(this ModuleBuilder &, std::string_view identifier_str) -> NodeID;
     auto reserve_function(this ModuleBuilder &, std::string_view identifier_str) -> NodeID;
+    auto decorate_node(this ModuleBuilder &, NodeID target_node_id, DecorationKind kind, DecorationOperand operand) -> NodeID;
+    auto decorate_struct_member(this ModuleBuilder &, NodeID target_struct_node_id, u32 member_index, DecorationKind kind, DecorationOperand operand) -> NodeID;
 
     auto lower_type(this ModuleBuilder &, const Type &type) -> NodeID;
-    auto lower_type(this ModuleBuilder &, AST::ExpressionValueKind value_kind) -> NodeID;
+    auto lower_type(this ModuleBuilder &, ValueKind value_kind) -> NodeID;
     auto lower_constant(this ModuleBuilder &, const Constant &constant) -> NodeID;
 
     //  ── AST VISITOR ─────────────────────────────────────────────────────

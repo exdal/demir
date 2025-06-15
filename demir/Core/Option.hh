@@ -1,7 +1,8 @@
 #pragma once
 
+#include "demir/demir.hh"
+
 #include "demir/Core/Compiler.hh"
-#include "demir/Core/Types.hh"
 
 #include <limits>
 #include <optional>

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "demir/Core/Types.hh"
 #include "demir/Lexer/Token.hh"
 
 namespace demir {

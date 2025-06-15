@@ -1,7 +1,8 @@
 #pragma once
 
+#include "demir/demir.hh"
+
 #include "demir/Core/Span.hh"
-#include "demir/Core/Types.hh"
 
 namespace demir::IR {
 enum class NodeID : u32 { Invalid = ~0_u32 };
@@ -32,12 +33,14 @@ enum class NodeKind : u32 {
     // Function instructions
     eFunctionCall,
 
-    // Virtual nodes
     eType,
     eConstant,
     eVariable,
     eBasicBlock,
     eFunction,
+    eDecoration,
+    eMemberDecoration,
+    eStruct,
 };
 
 // @grok what should i rename this to?
@@ -82,7 +85,7 @@ struct BranchInstruction {
 };
 
 // Terminating instruction, must be at the end of the block.
-struct ConditionalBranchInstruction  {
+struct ConditionalBranchInstruction {
     struct Condition {
         NodeID condition_node_id = NodeID::Invalid;
         NodeID true_block_node_id = NodeID::Invalid;
@@ -96,7 +99,7 @@ struct ConditionalBranchInstruction  {
 };
 
 // Terminating instruction, must be at the end of the block.
-struct MultiwayBranchInstruction  {
+struct MultiwayBranchInstruction {
     struct Branch {
         i64 literal = ~0_i64;
         NodeID target_block_id = NodeID::Invalid;
@@ -109,7 +112,7 @@ struct MultiwayBranchInstruction  {
     Span<Branch> branches = {};
 };
 
-struct LoadInstruction  {
+struct LoadInstruction {
     NodeKind kind = NodeKind::eLoad;
 
     NodeID type_node_id = NodeID::Invalid;
@@ -135,7 +138,7 @@ using GreaterThanEqualInstruction = HandedInstruction<NodeKind::eGreaterThanEqua
 using LessThanInstruction = HandedInstruction<NodeKind::eLessThan>;
 using LessThanEqualInstruction = HandedInstruction<NodeKind::eLessThanEqual>;
 
-struct FunctionCallInstruction  {
+struct FunctionCallInstruction {
     NodeKind kind = NodeKind::eFunctionCall;
 
     NodeID callee_node_id = NodeID::Invalid;
@@ -196,6 +199,42 @@ struct Function {
     NodeID first_basic_block_node_id = NodeID::Invalid;
 };
 
+union DecorationOperand {
+    u32 spec_constant_id = 0;
+    u32 array_stride;
+    u32 matrix_stride;
+    BuiltinKind builtin_kind;
+    u32 location;
+    u32 component;
+    u32 index;
+    u32 binding_point;
+    u32 descriptor_set;
+    u32 byte_offset;
+};
+
+struct Decoration {
+    NodeKind kind = NodeKind::eDecoration;
+
+    NodeID target_node_id = NodeID::Invalid;
+    DecorationKind decoration_kind = DecorationKind::eRelaxedPrecision;
+    DecorationOperand operand = {};
+};
+
+struct MemberDecoration {
+    NodeKind kind = NodeKind::eMemberDecoration;
+
+    NodeID target_struct_node_id = NodeID::Invalid;
+    u32 member_index = 0;
+    DecorationKind decoration_kind = DecorationKind::eRelaxedPrecision;
+    DecorationOperand operand = {};
+};
+
+struct Struct {
+    NodeKind kind = NodeKind::eStruct;
+
+    Span<NodeID> field_type_node_ids = {};
+};
+
 union Node {
     NodeKind kind = NodeKind::eVariable;
 
@@ -220,10 +259,13 @@ union Node {
     LessThanEqualInstruction less_than_eq_instr;
     FunctionCallInstruction function_call_instr;
 
-    Type type;
-    Constant constant;
-    Variable variable;
-    BasicBlock basic_block;
-    Function function;
+    Type type_node;
+    Constant constant_node;
+    Variable variable_node;
+    BasicBlock basic_block_node;
+    Function function_node;
+    Decoration decoration_node;
+    MemberDecoration member_decoration_node;
+    Struct struct_node;
 };
 } // namespace demir::IR

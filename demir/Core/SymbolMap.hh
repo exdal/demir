@@ -2,7 +2,6 @@
 
 #include "demir/Core/Compiler.hh"
 #include "demir/Core/Option.hh"
-#include "demir/Core/Types.hh"
 
 #include <ankerl/unordered_dense.h>
 

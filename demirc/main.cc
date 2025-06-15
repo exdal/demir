@@ -78,31 +78,31 @@ auto assignment_to_str(AST::AssignmentType type) -> std::string_view {
     return "???";
 }
 
-auto expression_value_kind_to_str(AST::ExpressionValueKind value_kind) -> std::string_view {
+auto expression_value_kind_to_str(ValueKind value_kind) -> std::string_view {
     switch (value_kind) {
-        case AST::ExpressionValueKind::eBool:
+        case ValueKind::eBool:
             return "bool";
-        case AST::ExpressionValueKind::ei8:
+        case ValueKind::ei8:
             return "i8";
-        case AST::ExpressionValueKind::eu8:
+        case ValueKind::eu8:
             return "u8";
-        case AST::ExpressionValueKind::ei16:
+        case ValueKind::ei16:
             return "i16";
-        case AST::ExpressionValueKind::eu16:
+        case ValueKind::eu16:
             return "u16";
-        case AST::ExpressionValueKind::ei32:
+        case ValueKind::ei32:
             return "i32";
-        case AST::ExpressionValueKind::eu32:
+        case ValueKind::eu32:
             return "u32";
-        case AST::ExpressionValueKind::ei64:
+        case ValueKind::ei64:
             return "i64";
-        case AST::ExpressionValueKind::eu64:
+        case ValueKind::eu64:
             return "u64";
-        case AST::ExpressionValueKind::ef32:
+        case ValueKind::ef32:
             return "f32";
-        case AST::ExpressionValueKind::ef64:
+        case ValueKind::ef64:
             return "f64";
-        case AST::ExpressionValueKind::eString:
+        case ValueKind::eString:
             return "string";
         default:
             return "i32 (implicitly)";
@@ -163,6 +163,12 @@ auto instruction_kind_to_str(IR::NodeKind kind) -> std::string_view {
             return "OpLabel";
         case IR::NodeKind::eFunction:
             return "OpFunction";
+        case IR::NodeKind::eStruct:
+            return "OpStruct";
+        case IR::NodeKind::eDecoration:
+            return "OpDecoration";
+        case IR::NodeKind::eMemberDecoration:
+            return "OpMemberDecoration";
     }
 }
 
@@ -176,6 +182,93 @@ auto instruction_type_kind_to_str(IR::TypeKind kind) -> std::string_view {
             return "int";
         case IR::TypeKind::eFloat:
             return "float";
+    }
+}
+
+auto decoration_kind_to_str(DecorationKind kind) -> std::string_view {
+    switch (kind) {
+        case DecorationKind::eRelaxedPrecision:
+            return "RelaxedPrecision";
+        case DecorationKind::eSpecID:
+            return "SpecID";
+        case DecorationKind::eBlock:
+            return "Block";
+        case DecorationKind::eRowMajor:
+            return "RowMajor";
+        case DecorationKind::eColMajor:
+            return "ColMajor";
+        case DecorationKind::eArrayStride:
+            return "ArrayStride";
+        case DecorationKind::eMatrixStride:
+            return "MatrixStride";
+        case DecorationKind::eShared:
+            return "Shared";
+        case DecorationKind::ePacked:
+            return "Packed";
+        case DecorationKind::eBuiltin:
+            return "Builtin";
+        case DecorationKind::eCoherent:
+            return "Coherent";
+        case DecorationKind::eFlat:
+            return "Flat";
+        case DecorationKind::eLocation:
+            return "Location";
+        case DecorationKind::eComponent:
+            return "Component";
+        case DecorationKind::eIndex:
+            return "Index";
+        case DecorationKind::eBinding:
+            return "Binding";
+        case DecorationKind::eDescriptorSet:
+            return "DescriptorSet";
+        case DecorationKind::eOffset:
+            return "Offset";
+    }
+}
+
+auto builtin_kind_to_str(BuiltinKind kind) -> std::string_view {
+    switch (kind) {
+        case BuiltinKind::eNone:
+            return "None";
+        case BuiltinKind::ePrimitiveIndex:
+            return "PrimitiveIndex";
+        case BuiltinKind::eInstanceIndex:
+            return "InstanceIndex";
+        case BuiltinKind::eVertexIndex:
+            return "VertexIndex";
+        case BuiltinKind::eGlobalInvocationID:
+            return "GlobalInvocationID";
+        case BuiltinKind::eLocalInvocationID:
+            return "LocalInvocationID";
+        case BuiltinKind::eWorkGroupID:
+            return "WorkGroupID";
+        case BuiltinKind::eLocalInvocationIndex:
+            return "LocalInvocationIndex";
+    }
+}
+
+auto decoration_operand_to_str(DecorationKind decoration_kind, IR::DecorationOperand &operand) -> std::string {
+    switch (decoration_kind) {
+        case DecorationKind::eBuiltin:
+            return std::string(builtin_kind_to_str(operand.builtin_kind));
+        case DecorationKind::eRelaxedPrecision:
+        case DecorationKind::eSpecID:
+        case DecorationKind::eBlock:
+        case DecorationKind::eRowMajor:
+        case DecorationKind::eColMajor:
+        case DecorationKind::eArrayStride:
+        case DecorationKind::eMatrixStride:
+        case DecorationKind::eShared:
+        case DecorationKind::ePacked:
+        case DecorationKind::eCoherent:
+        case DecorationKind::eFlat:
+        case DecorationKind::eLocation:
+        case DecorationKind::eComponent:
+        case DecorationKind::eIndex:
+        case DecorationKind::eBinding:
+        case DecorationKind::eDescriptorSet:
+        case DecorationKind::eOffset:
+            return std::to_string(operand.spec_constant_id);
     }
 }
 
@@ -210,23 +303,23 @@ struct PrinterVisitor : AST::Visitor {
         push();
         auto kind_str = expression_value_kind_to_str(v.value.kind);
         switch (v.value.kind) {
-            case AST::ExpressionValueKind::eBool: {
+            case ValueKind::eBool: {
                 print_indented("Value: {}", v.value.bool_val, kind_str);
             } break;
-            case AST::ExpressionValueKind::ei8:
-            case AST::ExpressionValueKind::ei16:
-            case AST::ExpressionValueKind::ei32:
-            case AST::ExpressionValueKind::ei64: {
+            case ValueKind::ei8:
+            case ValueKind::ei16:
+            case ValueKind::ei32:
+            case ValueKind::ei64: {
                 print_indented("Value: {}", v.value.i64_val, kind_str);
             } break;
-            case AST::ExpressionValueKind::eu8:
-            case AST::ExpressionValueKind::eu16:
-            case AST::ExpressionValueKind::eu32:
-            case AST::ExpressionValueKind::eu64: {
+            case ValueKind::eu8:
+            case ValueKind::eu16:
+            case ValueKind::eu32:
+            case ValueKind::eu64: {
                 print_indented("Value: {}", v.value.u64_val, kind_str);
             } break;
-            case AST::ExpressionValueKind::ef32:
-            case AST::ExpressionValueKind::ef64: {
+            case ValueKind::ef32:
+            case ValueKind::ef64: {
                 print_indented("Value: {}", v.value.f64_val, kind_str);
             } break;
             default: {
@@ -324,7 +417,7 @@ struct PrinterVisitor : AST::Visitor {
             print_indented("Parameter type: {}", expression_value_kind_to_str(param.value_kind));
         }
 
-        if (v.return_value_kind != AST::ExpressionValueKind::eNone) {
+        if (v.return_value_kind != ValueKind::eNone) {
             print_indented("Return type: {}", expression_value_kind_to_str(v.return_value_kind));
         }
 
@@ -435,7 +528,6 @@ int main(int, char *[]) {
     ast_module_printer.visit(ast_module.root_node_id);
 
     fmt::println("==== IR DUMP ====");
-    fmt::println("header:");
     using namespace demir;
     auto ir_module_builder = IR::ModuleBuilder(&allocator, &ast_module);
     auto ir_module = ir_module_builder.build();
@@ -450,7 +542,7 @@ int main(int, char *[]) {
         fmt::println(" %{:<2} = OpLabel", std::to_underlying(block_id));
 
         auto *block_node = ir_module.get_node(block_id);
-        auto &block = block_node->basic_block;
+        auto &block = block_node->basic_block_node;
 
         for (auto node_id : block.instruction_ids) {
             auto *instr_node = ir_module.get_node(node_id);
@@ -555,13 +647,16 @@ int main(int, char *[]) {
                     fmt::println("");
                 } break;
                 case IR::NodeKind::eVariable: {
-                    auto &variable = instr_node->variable;
+                    auto &variable = instr_node->variable_node;
                     fmt::println("[type: %{}]", std::to_underlying(variable.type_node_id));
                 } break;
                 case IR::NodeKind::eBasicBlock:
                 case IR::NodeKind::eType:
                 case IR::NodeKind::eConstant:
                 case IR::NodeKind::eFunction:
+                case IR::NodeKind::eStruct:
+                case IR::NodeKind::eDecoration:
+                case IR::NodeKind::eMemberDecoration:
                     break;
             }
         }
@@ -571,7 +666,7 @@ int main(int, char *[]) {
     for (const auto &[node, node_id] : std::views::zip(ir_module.nodes, std::views::iota(0_sz))) {
         switch (node.kind) {
             case IR::NodeKind::eType: {
-                auto &type = node.type;
+                auto &type = node.type_node;
                 fmt::println(
                     " %{:<2} = OpType [kind: {}] [width: {}] [signed: {}]",
                     node_id,
@@ -581,9 +676,9 @@ int main(int, char *[]) {
                 );
             } break;
             case IR::NodeKind::eConstant: {
-                auto &constant = node.constant;
-                auto *type_node = ir_module.get_node(constant.type_node_id);
-                auto &type = type_node->type;
+                auto &constant = node.constant_node;
+                auto *node = ir_module.get_node(constant.type_node_id);
+                auto &type = node->type_node;
                 auto value_str = std::string{};
                 switch (type.type_kind) {
                     case IR::TypeKind::eInt: {
@@ -615,13 +710,43 @@ int main(int, char *[]) {
             case IR::NodeKind::eFunction: {
                 function_ids.push_back(static_cast<IR::NodeID>(node_id));
             } break;
+            case IR::NodeKind::eStruct: {
+                auto &struct_node = node.struct_node;
+                fmt::print(" %{:<2} = OpStruct", node_id);
+                for (auto type_node_ids : struct_node.field_type_node_ids) {
+                    fmt::print(" [type: %{}]", std::to_underlying(type_node_ids));
+                }
+
+                fmt::println("");
+            } break;
+            case IR::NodeKind::eDecoration: {
+                auto &decoration_node = node.decoration_node;
+                fmt::println(
+                    " %{:<2} = OpDecoration [dst_node_id: %{}] [decoration: {}] [operand: {}]",
+                    node_id,
+                    std::to_underlying(decoration_node.target_node_id),
+                    decoration_kind_to_str(decoration_node.decoration_kind),
+                    decoration_operand_to_str(decoration_node.decoration_kind, decoration_node.operand)
+                );
+            } break;
+            case IR::NodeKind::eMemberDecoration: {
+                auto &member_decoration_node = node.member_decoration_node;
+                fmt::println(
+                    " %{:<2} = OpMemberDecoration [dst_struct_node_id: %{}] [member_index: {}] [decoration: {}] [operand: {}]",
+                    node_id,
+                    std::to_underlying(member_decoration_node.target_struct_node_id),
+                    member_decoration_node.member_index,
+                    decoration_kind_to_str(member_decoration_node.decoration_kind),
+                    decoration_operand_to_str(member_decoration_node.decoration_kind, member_decoration_node.operand)
+                );
+            } break;
             default:;
         }
     }
 
     for (auto function_id : function_ids) {
         auto *function_node = ir_module.get_node(function_id);
-        auto &function = function_node->function;
+        auto &function = function_node->function_node;
 
         fmt::println(" %{:<2} = OpFunction", std::to_underlying(function_id));
         visit_basic_block(function.first_basic_block_node_id);

@@ -1,29 +1,25 @@
 #pragma once
 
-#include "demir/AST/ExpressionType.hh"
-#include "demir/AST/Attribute.hh"
-
 #include "demir/Core/Span.hh"
-#include "demir/Core/Types.hh"
 
 #include <string_view>
 
 namespace demir::AST {
-enum struct Precedence : i32 {
-    eInvalid = -1,
-    eComma,
-    eAssignment,
-    eRange,
-    eLogicalOr,
-    eLogicalAnd,
-    eBitOr,
-    eBitXor,
-    eBitAnd,
-    eCompareEqual,
-    eCompareRelational,
-    eBitShift,
-    eAdditive,
-    eMultiplicative,
+enum Precedence : i32 {
+    Precedence_Invalid = -1,
+    Precedence_Comma,
+    Precedence_Assignment,
+    Precedence_Range,
+    Precedence_LogicalOr,
+    Precedence_LogicalAnd,
+    Precedence_BitOr,
+    Precedence_BitXor,
+    Precedence_BitAnd,
+    Precedence_CompareEqual,
+    Precedence_CompareRelational,
+    Precedence_BitShift,
+    Precedence_Additive,
+    Precedence_Multiplicative,
 };
 
 enum class NodeKind : u32 {
@@ -50,7 +46,7 @@ enum class NodeKind : u32 {
     eDeclareStructStatement,
 };
 
-enum struct NodeID : u32 { Invalid = ~0_u32 };
+enum class NodeID : u32 { Invalid = ~0_u32 };
 
 // Expressions
 struct IdentifierExpression {
@@ -62,10 +58,10 @@ struct IdentifierExpression {
 struct ConstantValueExpression {
     NodeKind kind = NodeKind::eConstantValueExpression;
 
-    ExpressionValue value = {};
+    Value value = {};
 };
 
-enum struct AssignmentType : u32 {
+enum class AssignmentType : u32 {
     eAssign = 0, // x = y
     eCompoundAdd, // x += y
     eCompoundSub, // x -= y
@@ -81,7 +77,7 @@ struct AssignExpression {
     NodeID rhs_expression_id = NodeID::Invalid;
 };
 
-enum struct BinaryOp : u32 {
+enum class BinaryOp : u32 {
     eAdd = 0, // +
     eSub, // -
     eMul, // *
@@ -133,15 +129,16 @@ struct MultiStatement {
 struct DeclareVarStatement {
     NodeKind kind = NodeKind::eDeclareVarStatement;
 
+    Span<Attribute> attributes = {};
     std::string_view identifier_str = {};
-    ExpressionValueKind value_kind = ExpressionValueKind::eNone;
+    ValueKind value_kind = ValueKind::eNone;
     NodeID initial_expression_id = NodeID::Invalid;
 };
 
 struct DeclareFunctionStatement {
     struct Parameter {
         std::string_view identifier_str = {};
-        ExpressionValueKind value_kind = ExpressionValueKind::eNone;
+        ValueKind value_kind = ValueKind::eNone;
     };
 
     NodeKind kind = NodeKind::eDeclareFunctionStatement;
@@ -151,7 +148,7 @@ struct DeclareFunctionStatement {
 
     std::string_view identifier_str = {};
     Span<Parameter> parameters = {};
-    ExpressionValueKind return_value_kind = ExpressionValueKind::eNone;
+    ValueKind return_value_kind = ValueKind::eNone;
     NodeID body_statement_id = NodeID::Invalid;
 };
 
@@ -210,7 +207,7 @@ struct ContinueStatement {
 struct DeclareStructStatement {
     struct Field {
         std::string_view identifier_str = {};
-        ExpressionValueKind value_kind = ExpressionValueKind::eNone;
+        ValueKind value_kind = ValueKind::eNone;
     };
 
     NodeKind kind = NodeKind::eDeclareStructStatement;

@@ -12,45 +12,45 @@ namespace demir {
 auto token_kind_to_precedence(TokenKind kind) -> AST::Precedence {
     switch (kind) {
         case TokenKind::eComma:
-            return AST::Precedence::eComma;
+            return AST::Precedence_Comma;
         case TokenKind::eEqual:
         case TokenKind::eAddEqual:
         case TokenKind::eSubEqual:
         case TokenKind::eMulEqual:
         case TokenKind::eDivEqual:
-            return AST::Precedence::eAssignment;
+            return AST::Precedence_Assignment;
         case TokenKind::eRange:
         case TokenKind::eRangeEqual:
-            return AST::Precedence::eRange;
+            return AST::Precedence_Range;
         case TokenKind::eLogicalOr:
-            return AST::Precedence::eLogicalOr;
+            return AST::Precedence_LogicalOr;
         case TokenKind::eLogicalAnd:
-            return AST::Precedence::eLogicalAnd;
+            return AST::Precedence_LogicalAnd;
         case TokenKind::eBitOr:
-            return AST::Precedence::eBitOr;
+            return AST::Precedence_BitOr;
         case TokenKind::eBitAnd:
-            return AST::Precedence::eBitAnd;
+            return AST::Precedence_BitAnd;
         case TokenKind::eCompareEqual:
         case TokenKind::eCompareNotEqual:
-            return AST::Precedence::eCompareEqual;
+            return AST::Precedence_CompareEqual;
         case TokenKind::eAngleLeft:
         case TokenKind::eAngleRight:
         case TokenKind::eGreaterEqual:
         case TokenKind::eLessEqual:
-            return AST::Precedence::eCompareRelational;
+            return AST::Precedence_CompareRelational;
         case TokenKind::eShiftLeft:
         case TokenKind::eShiftRight:
-            return AST::Precedence::eBitShift;
+            return AST::Precedence_BitShift;
         case TokenKind::eAdd:
         case TokenKind::eSub:
-            return AST::Precedence::eAdditive;
+            return AST::Precedence_Additive;
         case TokenKind::eMul:
         case TokenKind::eDiv:
-            return AST::Precedence::eMultiplicative;
+            return AST::Precedence_Multiplicative;
         default:;
     }
 
-    return AST::Precedence::eInvalid;
+    return AST::Precedence_Invalid;
 }
 
 auto token_kind_to_binary_op(TokenKind kind) -> Option<AST::BinaryOp> {
@@ -122,65 +122,65 @@ auto token_kind_to_assignment_type(TokenKind kind) -> Option<AST::AssignmentType
     return nullopt;
 }
 
-auto attribute_kind_to_string(AST::AttributeKind kind) -> std::string_view {
+auto attribute_kind_to_string(AttributeKind kind) -> std::string_view {
     switch (kind) {
-        case AST::AttributeKind::eNone:
+        case AttributeKind::eNone:
             return "None";
-        case AST::AttributeKind::eShader:
+        case AttributeKind::eShader:
             return "shader";
-        case AST::AttributeKind::eBuiltin:
+        case AttributeKind::eBuiltin:
             return "builtin";
-        case AST::AttributeKind::eThreads:
+        case AttributeKind::eThreads:
             return "threads";
-        case AST::AttributeKind::eLayout:
+        case AttributeKind::eLayout:
             return "layout";
     }
 }
 
-auto str_to_builtin_kind(std::string_view str) -> Option<AST::BuiltinKind> {
+auto str_to_builtin_kind(std::string_view str) -> Option<BuiltinKind> {
     switch (fnv64(str)) {
         case fnv64_c("primitive_index"):
-            return AST::BuiltinKind::ePrimitiveIndex;
+            return BuiltinKind::ePrimitiveIndex;
         case fnv64_c("instance_index"):
-            return AST::BuiltinKind::eInstanceIndex;
+            return BuiltinKind::eInstanceIndex;
         case fnv64_c("vertex_index"):
-            return AST::BuiltinKind::eVertexIndex;
+            return BuiltinKind::eVertexIndex;
         case fnv64_c("global_invocation_id"):
-            return AST::BuiltinKind::eGlobalInvocationID;
+            return BuiltinKind::eGlobalInvocationID;
         case fnv64_c("local_invocation_id"):
-            return AST::BuiltinKind::eLocalInvocationID;
+            return BuiltinKind::eLocalInvocationID;
         case fnv64_c("work_group_id"):
-            return AST::BuiltinKind::eWorkGroupID;
+            return BuiltinKind::eWorkGroupID;
         case fnv64_c("local_invocation_index"):
-            return AST::BuiltinKind::eLocalInvocationIndex;
+            return BuiltinKind::eLocalInvocationIndex;
         default:;
     }
 
     return nullopt;
 }
 
-auto str_to_shader_kind(std::string_view str) -> Option<AST::ShaderKind> {
+auto str_to_shader_kind(std::string_view str) -> Option<ShaderKind> {
     switch (fnv64(str)) {
         case fnv64_c("vertex"):
-            return AST::ShaderKind::eVertex;
+            return ShaderKind::eVertex;
         case fnv64_c("fragment"):
-            return AST::ShaderKind::eFragment;
+            return ShaderKind::eFragment;
         case fnv64_c("compute"):
-            return AST::ShaderKind::eCompute;
+            return ShaderKind::eCompute;
         default:;
     }
 
     return nullopt;
 }
 
-auto str_to_layout_kind(std::string_view str) -> Option<AST::LayoutKind> {
+auto str_to_layout_kind(std::string_view str) -> Option<LayoutKind> {
     switch (fnv64(str)) {
         case fnv64_c("scalar"):
-            return AST::LayoutKind::eScalar;
+            return LayoutKind::eScalar;
         case fnv64_c("std140"):
-            return AST::LayoutKind::eStd140;
+            return LayoutKind::eStd140;
         case fnv64_c("std430"):
-            return AST::LayoutKind::eStd430;
+            return LayoutKind::eStd430;
         default:;
     }
 
@@ -269,39 +269,39 @@ auto Parser::parse_identifier_str(this Parser &self) -> std::string_view {
     return self.allocator->alloc_str(token.string(self.source));
 }
 
-auto Parser::parse_intrinsic_type(this Parser &self) -> AST::ExpressionValueKind {
+auto Parser::parse_intrinsic_type(this Parser &self) -> ValueKind {
     const auto &token = self.peek();
 
     switch (token.kind) {
         case TokenKind::eBool:
-            return AST::ExpressionValueKind::eBool;
+            return ValueKind::eBool;
         case TokenKind::ei8:
-            return AST::ExpressionValueKind::ei8;
+            return ValueKind::ei8;
         case TokenKind::eu8:
-            return AST::ExpressionValueKind::eu8;
+            return ValueKind::eu8;
         case TokenKind::ei16:
-            return AST::ExpressionValueKind::ei16;
+            return ValueKind::ei16;
         case TokenKind::eu16:
-            return AST::ExpressionValueKind::eu16;
+            return ValueKind::eu16;
         case TokenKind::ei32:
-            return AST::ExpressionValueKind::ei32;
+            return ValueKind::ei32;
         case TokenKind::eu32:
-            return AST::ExpressionValueKind::eu32;
+            return ValueKind::eu32;
         case TokenKind::ei64:
-            return AST::ExpressionValueKind::ei64;
+            return ValueKind::ei64;
         case TokenKind::eu64:
-            return AST::ExpressionValueKind::eu64;
+            return ValueKind::eu64;
         case TokenKind::ef32:
-            return AST::ExpressionValueKind::ef32;
+            return ValueKind::ef32;
         case TokenKind::ef64:
-            return AST::ExpressionValueKind::ef64;
+            return ValueKind::ef64;
         default:
             throw ParserUnexpectedTokenError(token.location);
     }
 }
 
-auto Parser::parse_attributes(this Parser &self) -> std::vector<AST::Attribute> {
-    auto attributes = std::vector<AST::Attribute>();
+auto Parser::parse_attributes(this Parser &self) -> std::vector<Attribute> {
+    auto attributes = std::vector<Attribute>();
 
     self.expect(self.next(), TokenKind::eHash);
     self.expect(self.next(), TokenKind::eSquareLeft);
@@ -323,8 +323,8 @@ auto Parser::parse_attributes(this Parser &self) -> std::vector<AST::Attribute> 
                     throw ParserUnexpectedAttributeError(string_token.location);
                 }
 
-                auto attribute = AST::Attribute{
-                    .kind = AST::AttributeKind::eBuiltin,
+                auto attribute = Attribute{
+                    .kind = AttributeKind::eBuiltin,
                     .location = attrib_token.location,
                     .builtin_kind = builtin_kind.value(),
                 };
@@ -338,8 +338,8 @@ auto Parser::parse_attributes(this Parser &self) -> std::vector<AST::Attribute> 
                     throw ParserUnexpectedAttributeError(string_token.location);
                 }
 
-                auto attribute = AST::Attribute{
-                    .kind = AST::AttributeKind::eShader,
+                auto attribute = Attribute{
+                    .kind = AttributeKind::eShader,
                     .location = attrib_token.location,
                     .shader_kind = shader_kind.value(),
                 };
@@ -356,8 +356,8 @@ auto Parser::parse_attributes(this Parser &self) -> std::vector<AST::Attribute> 
                     throw ParserUnexpectedAttributeError(attrib_token.location);
                 }
 
-                auto attribute = AST::Attribute{
-                    .kind = AST::AttributeKind::eLayout,
+                auto attribute = Attribute{
+                    .kind = AttributeKind::eLayout,
                     .location = attrib_token.location,
                     .layout_kind = layout_kind.value(),
                 };
@@ -411,7 +411,7 @@ auto Parser::parse_multi_statement(this Parser &self) -> AST::NodeID {
 }
 
 auto Parser::parse_single_statement(this Parser &self) -> AST::NodeID {
-    auto attributes = std::vector<AST::Attribute>();
+    auto attributes = std::vector<Attribute>();
     while (true) {
         const auto &token = self.peek();
         switch (token.kind) {
@@ -422,7 +422,7 @@ auto Parser::parse_single_statement(this Parser &self) -> AST::NodeID {
                 return self.parse_function_decl_statement(std::move(attributes));
             }
             case TokenKind::eLet: {
-                return self.parse_variable_decl_statement();
+                return self.parse_variable_decl_statement(std::move(attributes));
             }
             case TokenKind::eReturn: {
                 return self.parse_return_statement();
@@ -467,12 +467,12 @@ auto Parser::parse_single_statement(this Parser &self) -> AST::NodeID {
     }
 }
 
-auto Parser::parse_variable_decl_statement(this Parser &self) -> AST::NodeID {
+auto Parser::parse_variable_decl_statement(this Parser &self, std::vector<Attribute> &&attributes) -> AST::NodeID {
     self.expect(self.next(), TokenKind::eLet);
 
     auto identifier_str = self.parse_identifier_str();
 
-    auto value_kind = AST::ExpressionValueKind::eNone;
+    auto value_kind = ValueKind::eNone;
     if (self.peek().is(TokenKind::eColon)) {
         self.next();
 
@@ -481,7 +481,7 @@ auto Parser::parse_variable_decl_statement(this Parser &self) -> AST::NodeID {
     }
 
     auto initial_expression_id = AST::NodeID::Invalid;
-    if (value_kind == AST::ExpressionValueKind::eNone || self.peek().is(TokenKind::eEqual)) {
+    if (value_kind == ValueKind::eNone || self.peek().is(TokenKind::eEqual)) {
         self.expect(self.next(), TokenKind::eEqual);
 
         initial_expression_id = self.parse_expression();
@@ -490,6 +490,7 @@ auto Parser::parse_variable_decl_statement(this Parser &self) -> AST::NodeID {
     self.expect(self.next(), TokenKind::eSemiColon);
 
     auto decl_var_statement = AST::DeclareVarStatement{
+        .attributes = self.allocator->copy_into(Span(attributes)),
         .identifier_str = identifier_str,
         .value_kind = value_kind,
         .initial_expression_id = initial_expression_id,
@@ -498,11 +499,11 @@ auto Parser::parse_variable_decl_statement(this Parser &self) -> AST::NodeID {
     return self.make_node({ .decl_var_statement = decl_var_statement });
 }
 
-auto Parser::parse_function_decl_statement(this Parser &self, std::vector<AST::Attribute> &&attributes) -> AST::NodeID {
-    auto shader_kind = AST::ShaderKind::eNone;
+auto Parser::parse_function_decl_statement(this Parser &self, std::vector<Attribute> &&attributes) -> AST::NodeID {
+    auto shader_kind = ShaderKind::eNone;
     for (const auto &attribute : attributes) {
         switch (attribute.kind) {
-            case AST::AttributeKind::eShader: {
+            case AttributeKind::eShader: {
                 shader_kind = attribute.shader_kind;
             } break;
             default: {
@@ -537,7 +538,7 @@ auto Parser::parse_function_decl_statement(this Parser &self, std::vector<AST::A
 
     self.expect(self.next(), TokenKind::eParenRight);
 
-    auto return_type_kind = AST::ExpressionValueKind::eNone;
+    auto return_type_kind = ValueKind::eNone;
     if (self.peek().is(TokenKind::eArrow)) {
         self.next();
 
@@ -563,7 +564,7 @@ auto Parser::parse_return_statement(this Parser &self) -> AST::NodeID {
 
     auto return_type_expression_id = AST::NodeID::Invalid;
     if (!self.peek().is(TokenKind::eSemiColon)) {
-        return_type_expression_id = self.parse_expression(AST::Precedence::eAssignment);
+        return_type_expression_id = self.parse_expression(AST::Precedence_Assignment);
     }
 
     self.expect(self.next(), TokenKind::eSemiColon);
@@ -685,7 +686,7 @@ auto Parser::parse_multiway_branch_statement(this Parser &self) -> AST::NodeID {
     return self.make_node({ .multiway_branch_statement = multiway_branch_statement });
 }
 
-auto Parser::parse_struct_decl_statement(this Parser &self, std::vector<AST::Attribute> &&attributes) -> AST::NodeID {
+auto Parser::parse_struct_decl_statement(this Parser &self, std::vector<Attribute> &&attributes) -> AST::NodeID {
     self.expect(self.next(), TokenKind::eStruct);
     auto identifier_str = self.parse_identifier_str();
 
@@ -712,10 +713,10 @@ auto Parser::parse_struct_decl_statement(this Parser &self, std::vector<AST::Att
 
     self.expect(self.next(), TokenKind::eBraceRight);
 
-    auto layout = AST::LayoutKind::eScalar;
+    auto layout = LayoutKind::eScalar;
     for (const auto &attribute : attributes) {
         switch (attribute.kind) {
-            case AST::AttributeKind::eLayout: {
+            case AttributeKind::eLayout: {
                 layout = attribute.layout_kind;
             } break;
             default:;
@@ -748,8 +749,7 @@ auto Parser::parse_expression_with_precedence(this Parser &self, AST::Precedence
         auto op_kind = op_token.kind;
         auto op_loc = op_token.location;
         auto op_prec = token_kind_to_precedence(op_kind);
-        auto op_prec_level = std::to_underlying(op_prec);
-        if (op_prec_level < std::to_underlying(precedence)) {
+        if (op_prec < precedence) {
             break;
         }
 
@@ -759,19 +759,18 @@ auto Parser::parse_expression_with_precedence(this Parser &self, AST::Precedence
         while (!self.peek().is(TokenKind::eEof)) {
             const auto &next_token = self.peek();
             auto next_prec = token_kind_to_precedence(next_token.kind);
-            auto next_prec_level = std::to_underlying(next_prec);
-            auto associate_right = next_prec == AST::Precedence::eAssignment;
-            if (associate_right ? (next_prec_level < op_prec_level) : (next_prec_level <= op_prec_level)) {
+            auto associate_right = next_prec == AST::Precedence_Assignment;
+            if (associate_right ? (next_prec < op_prec) : (next_prec <= op_prec)) {
                 break;
             }
 
             rhs_expression_id = self.parse_expression_with_precedence(next_prec, rhs_expression_id);
         }
 
-        if (op_prec == AST::Precedence::eAssignment) {
+        if (op_prec == AST::Precedence_Assignment) {
             auto assign_expression = AST::AssignExpression{
                 .assign_type = token_kind_to_assignment_type(op_kind).value(),
-                .lhs_expression_id = lhs_expression_id,
+                .lhs_expression_id = expression_id,
                 .rhs_expression_id = rhs_expression_id,
             };
 
@@ -784,7 +783,7 @@ auto Parser::parse_expression_with_precedence(this Parser &self, AST::Precedence
 
             auto binary_op_expression = AST::BinaryExpression{
                 .op = binary_op.value(),
-                .lhs_expression_id = lhs_expression_id,
+                .lhs_expression_id = expression_id,
                 .rhs_expression_id = rhs_expression_id,
             };
 
@@ -832,7 +831,7 @@ auto Parser::parse_expression_list(this Parser &self, TokenKind terminator) -> s
         }
 
         is_first = false;
-        expressions.push_back(self.parse_expression(AST::Precedence::eAssignment));
+        expressions.push_back(self.parse_expression(AST::Precedence_Assignment));
     }
 
     return expressions;
@@ -849,29 +848,29 @@ auto Parser::parse_identifier_expression(this Parser &self) -> AST::NodeID {
 auto Parser::parse_const_value_expression(this Parser &self) -> AST::NodeID {
     const auto &token = self.next();
 
-    auto expr_value = AST::ExpressionValue{};
+    auto expr_value = Value{};
     switch (token.kind) {
         case TokenKind::eTrue: {
-            expr_value.kind = AST::ExpressionValueKind::eBool;
+            expr_value.kind = ValueKind::eBool;
             expr_value.bool_val = true;
         } break;
         case TokenKind::eFalse: {
-            expr_value.kind = AST::ExpressionValueKind::eBool;
+            expr_value.kind = ValueKind::eBool;
             expr_value.bool_val = false;
         } break;
         case TokenKind::eStringLiteral: {
             auto token_str = token.string(self.source);
             auto expr_str = self.allocator->alloc_str(token_str);
-            expr_value.kind = AST::ExpressionValueKind::eString;
+            expr_value.kind = ValueKind::eString;
             expr_value.element_count = token.string_value.length;
             expr_value.str_val = expr_str.data();
         } break;
         case TokenKind::eIntegerLiteral: {
-            expr_value.kind = AST::ExpressionValueKind::ei32;
+            expr_value.kind = ValueKind::ei32;
             expr_value.u64_val = token.integer_value;
         } break;
         case TokenKind::eFloatingPointLiteral: {
-            expr_value.kind = AST::ExpressionValueKind::ef32;
+            expr_value.kind = ValueKind::ef32;
             expr_value.f64_val = token.float_value;
         } break;
         default: {

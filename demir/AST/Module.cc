@@ -14,7 +14,7 @@ auto Module::get_node(this Module &self, NodeID node_id) -> Node * {
     return &self.nodes[node_index];
 }
 
-auto Module::get_underlying_expression_value(this Module &self, NodeID node_id) -> Option<ExpressionValue> {
+auto Module::get_underlying_value(this Module &self, NodeID node_id) -> Option<Value> {
     if (node_id == NodeID::Invalid) {
         return {};
     }
@@ -22,7 +22,9 @@ auto Module::get_underlying_expression_value(this Module &self, NodeID node_id) 
     auto *node = self.get_node(node_id);
     switch (node->kind) {
         case NodeKind::eIdentifierExpression: {
-            // TODO:
+            // getting underyling of identifiers is not recommended
+            // we already handle this in IR, so future you hitting this
+            // case is probably doing something wrong
             DEMIR_DEBUGBREAK();
             return nullopt;
         }
@@ -30,13 +32,13 @@ auto Module::get_underlying_expression_value(this Module &self, NodeID node_id) 
             return node->const_value_expression.value;
         }
         case NodeKind::eAssignExpression: {
-            return self.get_underlying_expression_value(node->assign_expression.lhs_expression_id);
+            return self.get_underlying_value(node->assign_expression.lhs_expression_id);
         }
         case NodeKind::eBinaryExpression: {
-            return self.get_underlying_expression_value(node->binary_expression.rhs_expression_id);
+            return self.get_underlying_value(node->binary_expression.rhs_expression_id);
         }
         case NodeKind::eCallFunctionExpression: {
-            return self.get_underlying_expression_value(node->call_function_expression.callee_expression_id);
+            return self.get_underlying_value(node->call_function_expression.callee_expression_id);
         }
         default:;
     }

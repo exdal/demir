@@ -31,22 +31,22 @@ private:
     auto next(this Parser &) -> const Token &;
 
     auto parse_identifier_str(this Parser &) -> std::string_view;
-    auto parse_intrinsic_type(this Parser &) -> AST::ExpressionValueKind;
-    auto parse_attributes(this Parser &) -> std::vector<AST::Attribute>;
+    auto parse_intrinsic_type(this Parser &) -> ValueKind;
+    auto parse_attributes(this Parser &) -> std::vector<Attribute>;
 
     auto parse_statement(this Parser &, bool root = false) -> AST::NodeID;
     auto parse_multi_statement(this Parser &) -> AST::NodeID;
     auto parse_single_statement(this Parser &) -> AST::NodeID;
-    auto parse_variable_decl_statement(this Parser &) -> AST::NodeID;
-    auto parse_function_decl_statement(this Parser &, std::vector<AST::Attribute> &&attributes = {}) -> AST::NodeID;
+    auto parse_variable_decl_statement(this Parser &, std::vector<Attribute> &&attributes = {}) -> AST::NodeID;
+    auto parse_function_decl_statement(this Parser &, std::vector<Attribute> &&attributes = {}) -> AST::NodeID;
     auto parse_return_statement(this Parser &) -> AST::NodeID;
     auto parse_expression_statement(this Parser &) -> AST::NodeID;
     auto parse_while_statement(this Parser &) -> AST::NodeID;
     auto parse_branch_statement(this Parser &) -> AST::NodeID;
     auto parse_multiway_branch_statement(this Parser &) -> AST::NodeID;
-    auto parse_struct_decl_statement(this Parser &, std::vector<AST::Attribute> &&attributes = {}) -> AST::NodeID;
+    auto parse_struct_decl_statement(this Parser &, std::vector<Attribute> &&attributes = {}) -> AST::NodeID;
 
-    auto parse_expression(this Parser &, AST::Precedence precedence = AST::Precedence::eComma) -> AST::NodeID;
+    auto parse_expression(this Parser &, AST::Precedence precedence = AST::Precedence_Comma) -> AST::NodeID;
     auto parse_expression_with_precedence(this Parser &, AST::Precedence precedence, AST::NodeID lhs_expression_id) -> AST::NodeID;
     auto parse_primary_expression(this Parser &) -> AST::NodeID;
     auto parse_expression_list(this Parser &, TokenKind terminator) -> std::vector<AST::NodeID>;
