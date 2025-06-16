@@ -1,4 +1,5 @@
 #include "demir/IR/Module.hh"
+#include "demir/IR/StructRules.hh"
 
 #include <ranges>
 #include <utility>
@@ -824,13 +825,10 @@ auto ModuleBuilder::visit(AST::DeclareStructStatement &statement) -> void {
 
     auto struct_node_id = this->make_node({ .struct_node = struct_node });
 
+    auto struct_layout = StructLayout(statement.layout);
     for (const auto &[field, member_index] : std::views::zip(statement.fields, std::views::iota(0_sz))) {
-        this->decorate_struct_member(
-            struct_node_id,
-            member_index,
-            DecorationKind::eOffset,
-            DecorationOperand{ .byte_offset = 4 * static_cast<u32>(member_index) }
-        );
+        auto field_offset = struct_layout.add_field(field.value_kind);
+        this->decorate_struct_member(struct_node_id, member_index, DecorationKind::eOffset, DecorationOperand{ .byte_offset = field_offset });
     }
 }
 

@@ -163,7 +163,6 @@ struct Value {
         bool bool_val;
     };
 
-    static auto get_alignment(ValueKind value_kind, LayoutKind layout_kind, u32 element_count) -> usize;
 };
 
 template<typename T, usize N>

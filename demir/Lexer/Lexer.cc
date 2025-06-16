@@ -171,7 +171,7 @@ auto Lexer::read_quoted_string(this Lexer &self) -> Token {
 }
 
 auto Lexer::position(this Lexer &self) -> Position {
-    return Position(self.line, self.offset - self.line_offset);
+    return Position(self.line + 1, self.offset - self.line_offset + 1);
 }
 
 auto Lexer::next_line(this Lexer &self) -> void {

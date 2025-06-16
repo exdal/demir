@@ -8,7 +8,7 @@ struct Lexer {
     Token current = {};
 
     u32 offset = 0;
-    u32 line = 1;
+    u32 line = 0;
     u32 line_offset = 0;
 
     static auto tokenize(std::string_view source, bool skip_comments = true) -> std::vector<Token>;
