@@ -1,6 +1,7 @@
 #include "demir/AST/Module.hh"
 #include "demir/AST/Visitor.hh"
 #include "demir/IR/Module.hh"
+#include "demir/IR/Visitor.hh"
 #include "demir/Parser/Parser.hh"
 
 #include <demir/demir.hh>
@@ -169,6 +170,8 @@ auto instruction_kind_to_str(IR::NodeKind kind) -> std::string_view {
             return "OpDecoration";
         case IR::NodeKind::eMemberDecoration:
             return "OpMemberDecoration";
+        case IR::NodeKind::eEntryPoint:
+            return "OpEntryPoint";
     }
 }
 
@@ -295,7 +298,7 @@ struct PrinterVisitor : AST::Visitor {
     }
 
     auto visit(AST::IdentifierExpression &v) -> void override {
-        print_indented("Identifier expression: {}", v.identifier_str);
+        print_indented("Identifier expression: {}", v.identifier);
     }
 
     auto visit(AST::ConstantValueExpression &v) -> void override {
@@ -400,8 +403,8 @@ struct PrinterVisitor : AST::Visitor {
     auto visit(AST::DeclareVarStatement &v) -> void override {
         print_indented("Declare var statement:");
         push();
-        print_indented("Identifier: {}", v.identifier_str);
-        print_indented("Type: {}", expression_value_kind_to_str(v.value_kind));
+        print_indented("Identifier: {}", v.identifier);
+        print_indented("Type: {}", v.type_identifier);
         if (v.initial_expression_id != AST::NodeID::Invalid) {
             visit(v.initial_expression_id);
         }
@@ -411,14 +414,14 @@ struct PrinterVisitor : AST::Visitor {
     auto visit(AST::DeclareFunctionStatement &v) -> void override {
         print_indented("Declare function statement:");
         push();
-        print_indented("Identifier: {}", v.identifier_str);
+        print_indented("Identifier: {}", v.identifier);
         for (const auto &param : v.parameters) {
-            print_indented("Parameter identifier: {}", param.identifier_str);
-            print_indented("Parameter type: {}", expression_value_kind_to_str(param.value_kind));
+            print_indented("Parameter identifier: {}", param.identifier);
+            print_indented("Parameter type: {}", param.type_identifier);
         }
 
-        if (v.return_value_kind != ValueKind::eNone) {
-            print_indented("Return type: {}", expression_value_kind_to_str(v.return_value_kind));
+        if (not v.return_type_identifier.empty()) {
+            print_indented("Return type: {}", v.return_type_identifier);
         }
 
         visit(v.body_statement_id);
@@ -500,15 +503,220 @@ struct PrinterVisitor : AST::Visitor {
     auto visit(AST::DeclareStructStatement &v) -> void override {
         print_indented("Declare struct statement:");
         push();
-        print_indented("Identifier: {}", v.identifier_str);
+        print_indented("Identifier: {}", v.identifier);
         print_indented("Fields:");
         push();
         for (const auto &[field, i] : std::views::zip(v.fields, std::views::iota(0_sz))) {
-            print_indented("- Field identifier: {}", field.identifier_str);
-            print_indented("{:<2}Field type: {}", "", expression_value_kind_to_str(field.value_kind));
+            print_indented("- Field identifier: {}", field.identifier);
+            print_indented("{:<2}Field type: {}", "", field.type_identifier);
         }
         pop();
         pop();
+    }
+};
+
+struct IRPrinter : IR::Visitor {
+    using IR::Visitor::visit;
+
+    IRPrinter(IR::Module *module_) : IR::Visitor(module_) {}
+
+    template<typename... Args>
+    auto print(IR::NodeID node_id, IR::NodeKind node_kind, fmt::format_string<Args...> str = "", Args &&...args) {
+        auto f = fmt::format(str, std::forward<Args>(args)...);
+        fmt::println(" %{:<2} = {} {}", std::to_underlying(node_id), instruction_kind_to_str(node_kind), f);
+    }
+
+    auto visit(IR::ReturnInstruction &v, IR::NodeID node_id) -> void override {
+        print(node_id, v.kind, "[node: {}]", std::to_underlying(v.returning_node_id));
+    }
+
+    auto visit(IR::KillInstruction &, IR::NodeID node_id) -> void override {
+        print(node_id, IR::NodeKind::eKill);
+    }
+
+    auto visit(IR::SelectionMergeInstruction &v, IR::NodeID node_id) -> void override {
+        print(node_id, v.kind, "[dst_block: %{}]", std::to_underlying(v.dst_block_node_id));
+    }
+
+    auto visit(IR::LoopMergeInstruction &v, IR::NodeID node_id) -> void override {
+        print(
+            node_id,
+            v.kind,
+            "[dst_block: %{}] [continuing_block: %{}]",
+            std::to_underlying(v.dst_block_node_id),
+            std::to_underlying(v.continuing_block_node_id)
+        );
+    }
+
+    auto visit(IR::BranchInstruction &v, IR::NodeID node_id) -> void override {
+        print(node_id, v.kind, "[dst_block: %{}]", std::to_underlying(v.next_block_node_id));
+    }
+
+    auto visit(IR::ConditionalBranchInstruction &v, IR::NodeID node_id) -> void override {
+        auto str = std::string{};
+        for (const auto &cond : v.conditions) {
+            str += fmt::format("[condition: %{}] [true_branch: %{}] ", std::to_underlying(cond.condition_node_id), std::to_underlying(cond.true_block_node_id));
+        }
+
+        str += fmt::format("[false_branch: %{}] ", std::to_underlying(v.false_block_node_id));
+        print(node_id, v.kind, "{}", str);
+    }
+
+    auto visit(IR::MultiwayBranchInstruction &v, IR::NodeID node_id) -> void override {
+        auto str = fmt::format("[default_block: %{}]", std::to_underlying(v.default_block_node_id));
+
+        for (const auto &branch : v.branches) {
+            str += fmt::format(" [branch_value: {}] [dst_block: %{}]", branch.literal, std::to_underlying(branch.target_block_id));
+        }
+
+        print(node_id, v.kind, "{}", str);
+    }
+
+    auto visit(IR::LoadInstruction &v, IR::NodeID node_id) -> void override {
+        print(node_id, v.kind, "[type: %{}] [variable: %{}]", std::to_underlying(v.type_node_id), std::to_underlying(v.variable_node_id));
+    }
+
+    auto visit(IR::StoreInstruction &v, IR::NodeID node_id) -> void override {
+        print(node_id, v.kind, "[dst: %{}] [src: %{}]", std::to_underlying(v.dst_node_id), std::to_underlying(v.src_node_id));
+    }
+
+    auto visit(IR::AddInstruction &v, IR::NodeID node_id) -> void override {
+        print(node_id, v.kind, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.lhs_node_id), std::to_underlying(v.rhs_node_id));
+    }
+
+    auto visit(IR::SubInstruction &v, IR::NodeID node_id) -> void override {
+        print(node_id, v.kind, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.lhs_node_id), std::to_underlying(v.rhs_node_id));
+    }
+
+    auto visit(IR::MulInstruction &v, IR::NodeID node_id) -> void override {
+        print(node_id, v.kind, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.lhs_node_id), std::to_underlying(v.rhs_node_id));
+    }
+
+    auto visit(IR::DivInstruction &v, IR::NodeID node_id) -> void override {
+        print(node_id, v.kind, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.lhs_node_id), std::to_underlying(v.rhs_node_id));
+    }
+
+    auto visit(IR::EqualInstruction &v, IR::NodeID node_id) -> void override {
+        print(node_id, v.kind, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.lhs_node_id), std::to_underlying(v.rhs_node_id));
+    }
+
+    auto visit(IR::NotEqualInstruction &v, IR::NodeID node_id) -> void override {
+        print(node_id, v.kind, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.lhs_node_id), std::to_underlying(v.rhs_node_id));
+    }
+
+    auto visit(IR::GreaterThanInstruction &v, IR::NodeID node_id) -> void override {
+        print(node_id, v.kind, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.lhs_node_id), std::to_underlying(v.rhs_node_id));
+    }
+
+    auto visit(IR::GreaterThanEqualInstruction &v, IR::NodeID node_id) -> void override {
+        print(node_id, v.kind, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.lhs_node_id), std::to_underlying(v.rhs_node_id));
+    }
+
+    auto visit(IR::LessThanInstruction &v, IR::NodeID node_id) -> void override {
+        print(node_id, v.kind, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.lhs_node_id), std::to_underlying(v.rhs_node_id));
+    }
+
+    auto visit(IR::LessThanEqualInstruction &v, IR::NodeID node_id) -> void override {
+        print(node_id, v.kind, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.lhs_node_id), std::to_underlying(v.rhs_node_id));
+    }
+
+    auto visit(IR::FunctionCallInstruction &v, IR::NodeID node_id) -> void override {
+        auto str = fmt::format("[callee: %{}]", std::to_underlying(v.callee_node_id));
+        for (auto param_node_id : v.param_node_ids) {
+            str += fmt::format(" [param: %{}]", std::to_underlying(param_node_id));
+        }
+
+        print(node_id, v.kind, "{}", str);
+    }
+
+    auto visit(IR::Type &v, IR::NodeID node_id) -> void override {
+        print(node_id, v.kind, "[kind: {}] [width: {}] [signed: {}]", instruction_type_kind_to_str(v.type_kind), v.width, v.is_signed);
+    }
+
+    auto visit(IR::Constant &v, IR::NodeID node_id) -> void override {
+        auto *type_node = module->get_node(v.type_node_id);
+        auto &type = type_node->type_node;
+        auto value_str = std::string{};
+        switch (type.type_kind) {
+            case IR::TypeKind::eInt: {
+                switch (type.width) {
+                    case 8: {
+                        value_str = std::to_string(type.is_signed ? v.i8_value : v.u8_value);
+                    } break;
+                    case 16: {
+                        value_str = std::to_string(type.is_signed ? v.i16_value : v.u16_value);
+                    } break;
+                    case 32: {
+                        value_str = std::to_string(type.is_signed ? v.i32_value : v.u32_value);
+                    } break;
+                    case 64: {
+                        value_str = std::to_string(type.is_signed ? v.i64_value : v.u64_value);
+                    } break;
+                    default:;
+                }
+            } break;
+            case IR::TypeKind::eFloat: {
+            } break;
+            default: {
+                value_str = "0";
+            } break;
+        }
+
+        print(node_id, v.kind, "[type: %{}] [value: {}]", std::to_underlying(v.type_node_id), value_str);
+    }
+
+    auto visit(IR::Variable &v, IR::NodeID node_id) -> void override {
+        print(node_id, v.kind, "[type: %{}]", std::to_underlying(v.type_node_id));
+    }
+
+    auto visit(IR::BasicBlock &v, IR::NodeID node_id) -> void override {
+        print(node_id, v.kind);
+    }
+
+    auto visit(IR::Function &v, IR::NodeID node_id) -> void override {
+        print(node_id, v.kind);
+    }
+
+    auto visit(IR::Decoration &v, IR::NodeID node_id) -> void override {
+        print(
+            node_id,
+            v.kind,
+            "[dst_node_id: %{}] [decoration: {}] [operand: {}]",
+            std::to_underlying(v.target_node_id),
+            decoration_kind_to_str(v.decoration_kind),
+            decoration_operand_to_str(v.decoration_kind, v.operand)
+        );
+    }
+
+    auto visit(IR::MemberDecoration &v, IR::NodeID node_id) -> void override {
+        print(
+            node_id,
+            v.kind,
+            "[dst_struct_id: %{}] [decoration: {}] [operand: {}]",
+            std::to_underlying(v.target_struct_node_id),
+            decoration_kind_to_str(v.decoration_kind),
+            decoration_operand_to_str(v.decoration_kind, v.operand)
+        );
+    }
+
+    auto visit(IR::Struct &v, IR::NodeID node_id) -> void override {
+        auto str = std::string{};
+        for (auto type_node_ids : v.field_type_node_ids) {
+            str += fmt::format(" [type: %{}]", std::to_underlying(type_node_ids));
+        }
+
+        print(node_id, v.kind, "{}", str);
+    }
+
+    auto visit(IR::EntryPoint &v, IR::NodeID node_id) -> void override {
+        print(
+            node_id,
+            v.kind,
+            "[kind: %{}] [function_node_id: %{}] [identifier: {}]",
+            std::to_underlying(v.shader_kind),
+            std::to_underlying(v.function_node_id),
+            v.name_str
+        );
     }
 };
 
@@ -528,229 +736,14 @@ int main(int, char *[]) {
     ast_module_printer.visit(ast_module.root_node_id);
 
     fmt::println("==== IR DUMP ====");
-    using namespace demir;
-    auto ir_module_builder = IR::ModuleBuilder(&allocator, &ast_module);
-    auto ir_module = ir_module_builder.build();
-
-    auto visited_blocks = ankerl::unordered_dense::set<IR::NodeID>();
-    auto visit_basic_block = [&](this auto &visitor, IR::NodeID block_id) -> void {
-        if (visited_blocks.find(block_id) != visited_blocks.end()) {
-            return;
+    auto ir_modules = IR::lower_ast_module(&allocator, &ast_module);
+    for (auto &ir_module : ir_modules) {
+        auto ir_module_printer = IRPrinter(&ir_module);
+        for (auto node_id : ir_module.global_nodes) {
+            ir_module_printer.visit(node_id);
         }
-        visited_blocks.emplace(block_id);
 
-        fmt::println(" %{:<2} = OpLabel", std::to_underlying(block_id));
-
-        auto *block_node = ir_module.get_node(block_id);
-        auto &block = block_node->basic_block_node;
-
-        for (auto node_id : block.instruction_ids) {
-            auto *instr_node = ir_module.get_node(node_id);
-            fmt::print(" %{:<2} = {} ", std::to_underlying(node_id), instruction_kind_to_str(instr_node->kind));
-
-            switch (instr_node->kind) {
-                case IR::NodeKind::eNoOp:
-                case IR::NodeKind::eKill: {
-                    fmt::println("");
-                } break;
-                case IR::NodeKind::eReturn: {
-                    auto &return_instr = instr_node->return_instr;
-                    fmt::println("[return: %{}]", std::to_underlying(return_instr.returning_node_id));
-                } break;
-                case IR::NodeKind::eBranch: {
-                    auto &branch_instr = instr_node->branch_instr;
-                    fmt::println("[branch: %{}]", std::to_underlying(branch_instr.next_block_node_id));
-                    visitor(branch_instr.next_block_node_id);
-                } break;
-                case IR::NodeKind::eConditionalBranch: {
-                    auto &cond_branch_instr = instr_node->conditional_branch_instr;
-                    for (const auto &cond : cond_branch_instr.conditions) {
-                        fmt::print(
-                            "[condition: %{}] [true_branch: %{}] ",
-                            std::to_underlying(cond.condition_node_id),
-                            std::to_underlying(cond.true_block_node_id)
-                        );
-                    }
-
-                    fmt::println("[false_branch: %{}] ", std::to_underlying(cond_branch_instr.false_block_node_id));
-
-                    for (const auto &cond : cond_branch_instr.conditions) {
-                        visitor(cond.true_block_node_id);
-                    }
-
-                    visitor(cond_branch_instr.false_block_node_id);
-                } break;
-                case IR::NodeKind::eLoad: {
-                    auto &load_instr = instr_node->load_instr;
-                    fmt::println(
-                        "[type: %{}] [variable: %{}]",
-                        std::to_underlying(load_instr.type_node_id),
-                        std::to_underlying(load_instr.variable_node_id)
-                    );
-                } break;
-                case IR::NodeKind::eStore: {
-                    auto &store_instr = instr_node->store_instr;
-                    fmt::println("[dst: %{}] [src: %{}]", std::to_underlying(store_instr.dst_node_id), std::to_underlying(store_instr.src_node_id));
-                } break;
-                case IR::NodeKind::eAdd:
-                case IR::NodeKind::eSub:
-                case IR::NodeKind::eMul:
-                case IR::NodeKind::eDiv:
-                case IR::NodeKind::eEqual:
-                case IR::NodeKind::eNotEqual:
-                case IR::NodeKind::eGreaterThan:
-                case IR::NodeKind::eGreaterThanEqual:
-                case IR::NodeKind::eLessThan:
-                case IR::NodeKind::eLessThanEqual: {
-                    auto &alu_instr = instr_node->add_instr;
-                    fmt::println(//
-                            "[lhs: %{}] [rhs: %{}]",
-                            std::to_underlying(alu_instr.lhs_node_id),
-                            std::to_underlying(alu_instr.rhs_node_id)
-                        );
-                } break;
-                case IR::NodeKind::eSelectionMerge: {
-                    auto &selection_merge_instr = instr_node->selection_merge_instr;
-                    fmt::println("[dst_block: %{}]", std::to_underlying(selection_merge_instr.dst_block_node_id));
-                } break;
-                case IR::NodeKind::eLoopMerge: {
-                    auto &loop_merge_instr = instr_node->loop_merge_instr;
-                    fmt::println(
-                        "[dst_block: %{}] [continuing_block: %{}]",
-                        std::to_underlying(loop_merge_instr.dst_block_node_id),
-                        std::to_underlying(loop_merge_instr.continuing_block_node_id)
-                    );
-                } break;
-                case IR::NodeKind::eMultiwayBranch: {
-                    auto &multiway_branch = instr_node->multiway_branch_instr;
-                    fmt::print("[default_block: %{}]", std::to_underlying(multiway_branch.default_block_node_id));
-
-                    for (const auto &branch : multiway_branch.branches) {
-                        fmt::print(" [branch_value: {}] [dst_block: %{}]", branch.literal, std::to_underlying(branch.target_block_id));
-                    }
-
-                    fmt::println("");
-
-                    visitor(multiway_branch.default_block_node_id);
-                    for (const auto &branch : multiway_branch.branches) {
-                        visitor(branch.target_block_id);
-                    }
-                } break;
-                case IR::NodeKind::eFunctionCall: {
-                    auto &function_call = instr_node->function_call_instr;
-                    fmt::print("[callee: {}]", std::to_underlying(function_call.callee_node_id));
-
-                    for (auto param_node_id : function_call.param_node_ids) {
-                        fmt::print(" [param: %{}]", std::to_underlying(param_node_id));
-                    }
-
-                    fmt::println("");
-                } break;
-                case IR::NodeKind::eVariable: {
-                    auto &variable = instr_node->variable_node;
-                    fmt::println("[type: %{}]", std::to_underlying(variable.type_node_id));
-                } break;
-                case IR::NodeKind::eBasicBlock:
-                case IR::NodeKind::eType:
-                case IR::NodeKind::eConstant:
-                case IR::NodeKind::eFunction:
-                case IR::NodeKind::eStruct:
-                case IR::NodeKind::eDecoration:
-                case IR::NodeKind::eMemberDecoration:
-                    break;
-            }
-        }
-    };
-
-    auto function_ids = std::vector<IR::NodeID>();
-    for (const auto &[node, node_id] : std::views::zip(ir_module.nodes, std::views::iota(0_sz))) {
-        switch (node.kind) {
-            case IR::NodeKind::eType: {
-                auto &type = node.type_node;
-                fmt::println(
-                    " %{:<2} = OpType [kind: {}] [width: {}] [signed: {}]",
-                    node_id,
-                    instruction_type_kind_to_str(type.type_kind),
-                    type.width,
-                    type.is_signed
-                );
-            } break;
-            case IR::NodeKind::eConstant: {
-                auto &constant = node.constant_node;
-                auto *node = ir_module.get_node(constant.type_node_id);
-                auto &type = node->type_node;
-                auto value_str = std::string{};
-                switch (type.type_kind) {
-                    case IR::TypeKind::eInt: {
-                        switch (type.width) {
-                            case 8: {
-                                value_str = std::to_string(type.is_signed ? constant.i8_value : constant.u8_value);
-                            } break;
-                            case 16: {
-                                value_str = std::to_string(type.is_signed ? constant.i16_value : constant.u16_value);
-                            } break;
-                            case 32: {
-                                value_str = std::to_string(type.is_signed ? constant.i32_value : constant.u32_value);
-                            } break;
-                            case 64: {
-                                value_str = std::to_string(type.is_signed ? constant.i64_value : constant.u64_value);
-                            } break;
-                            default:;
-                        }
-                    } break;
-                    case IR::TypeKind::eFloat: {
-                    } break;
-                    default: {
-                        value_str = "0";
-                    } break;
-                }
-
-                fmt::println(" %{:<2} = OpConstant [type: %{}] [value: {}]", node_id, std::to_underlying(constant.type_node_id), value_str);
-            } break;
-            case IR::NodeKind::eFunction: {
-                function_ids.push_back(static_cast<IR::NodeID>(node_id));
-            } break;
-            case IR::NodeKind::eStruct: {
-                auto &struct_node = node.struct_node;
-                fmt::print(" %{:<2} = OpStruct", node_id);
-                for (auto type_node_ids : struct_node.field_type_node_ids) {
-                    fmt::print(" [type: %{}]", std::to_underlying(type_node_ids));
-                }
-
-                fmt::println("");
-            } break;
-            case IR::NodeKind::eDecoration: {
-                auto &decoration_node = node.decoration_node;
-                fmt::println(
-                    " %{:<2} = OpDecoration [dst_node_id: %{}] [decoration: {}] [operand: {}]",
-                    node_id,
-                    std::to_underlying(decoration_node.target_node_id),
-                    decoration_kind_to_str(decoration_node.decoration_kind),
-                    decoration_operand_to_str(decoration_node.decoration_kind, decoration_node.operand)
-                );
-            } break;
-            case IR::NodeKind::eMemberDecoration: {
-                auto &member_decoration_node = node.member_decoration_node;
-                fmt::println(
-                    " %{:<2} = OpMemberDecoration [dst_struct_node_id: %{}] [member_index: {}] [decoration: {}] [operand: {}]",
-                    node_id,
-                    std::to_underlying(member_decoration_node.target_struct_node_id),
-                    member_decoration_node.member_index,
-                    decoration_kind_to_str(member_decoration_node.decoration_kind),
-                    decoration_operand_to_str(member_decoration_node.decoration_kind, member_decoration_node.operand)
-                );
-            } break;
-            default:;
-        }
-    }
-
-    for (auto function_id : function_ids) {
-        auto *function_node = ir_module.get_node(function_id);
-        auto &function = function_node->function_node;
-
-        fmt::println(" %{:<2} = OpFunction", std::to_underlying(function_id));
-        visit_basic_block(function.first_basic_block_node_id);
-        fmt::println("{:<6} OpFunctionEnd", "");
+        ir_module_printer.visit(ir_module.entry_point_node_id);
     }
 
     return 0;

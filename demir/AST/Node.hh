@@ -52,7 +52,7 @@ enum class NodeID : u32 { Invalid = ~0_u32 };
 struct IdentifierExpression {
     NodeKind kind = NodeKind::eIdentifierExpression;
 
-    std::string_view identifier_str = {};
+    std::string_view identifier = {};
 };
 
 struct ConstantValueExpression {
@@ -130,25 +130,23 @@ struct DeclareVarStatement {
     NodeKind kind = NodeKind::eDeclareVarStatement;
 
     Span<Attribute> attributes = {};
-    std::string_view identifier_str = {};
-    ValueKind value_kind = ValueKind::eNone;
+    std::string_view identifier = {};
+    std::string_view type_identifier = {};
     NodeID initial_expression_id = NodeID::Invalid;
 };
 
 struct DeclareFunctionStatement {
     struct Parameter {
-        std::string_view identifier_str = {};
-        ValueKind value_kind = ValueKind::eNone;
+        std::string_view identifier = {};
+        std::string_view type_identifier = {};
     };
 
     NodeKind kind = NodeKind::eDeclareFunctionStatement;
 
-    // Attributes
-    ShaderKind shader_kind = ShaderKind::eNone;
-
-    std::string_view identifier_str = {};
+    Span<Attribute> attributes = {};
+    std::string_view identifier = {};
     Span<Parameter> parameters = {};
-    ValueKind return_value_kind = ValueKind::eNone;
+    std::string_view return_type_identifier = {};
     NodeID body_statement_id = NodeID::Invalid;
 };
 
@@ -206,14 +204,14 @@ struct ContinueStatement {
 
 struct DeclareStructStatement {
     struct Field {
-        std::string_view identifier_str = {};
-        ValueKind value_kind = ValueKind::eNone;
+        std::string_view identifier = {};
+        std::string_view type_identifier = {};
     };
 
     NodeKind kind = NodeKind::eDeclareStructStatement;
 
-    LayoutKind layout = LayoutKind::eScalar;
-    std::string_view identifier_str = {};
+    Span<Attribute> attributes = {};
+    std::string_view identifier = {};
     Span<Field> fields = {};
 };
 

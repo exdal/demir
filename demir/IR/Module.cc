@@ -1,10 +1,42 @@
 #include "demir/IR/Module.hh"
+#include "demir/Core/FNV.hh"
 #include "demir/IR/StructRules.hh"
 
+#include <algorithm>
 #include <ranges>
 #include <utility>
 
 namespace demir::IR {
+constexpr auto type_identifier_to_value_kind(std::string_view type_identifier) -> ValueKind {
+    switch (fnv64(type_identifier)) {
+        case fnv64_c("bool"):
+            return ValueKind::eBool;
+        case fnv64_c("i8"):
+            return ValueKind::ei8;
+        case fnv64_c("u8"):
+            return ValueKind::eu8;
+        case fnv64_c("i16"):
+            return ValueKind::ei16;
+        case fnv64_c("u16"):
+            return ValueKind::eu16;
+        case fnv64_c("i32"):
+            return ValueKind::ei32;
+        case fnv64_c("u32"):
+            return ValueKind::eu32;
+        case fnv64_c("i64"):
+            return ValueKind::ei64;
+        case fnv64_c("u64"):
+            return ValueKind::eu64;
+        case fnv64_c("f32"):
+            return ValueKind::ef32;
+        case fnv64_c("f64"):
+            return ValueKind::ef64;
+        default:;
+    }
+
+    return ValueKind::eNone;
+}
+
 //  ── BASIC BLOCK BUILDER ─────────────────────────────────────────────
 
 auto BasicBlockBuilder::get_underlying(this BasicBlockBuilder &self) -> BasicBlock & {
@@ -12,28 +44,41 @@ auto BasicBlockBuilder::get_underlying(this BasicBlockBuilder &self) -> BasicBlo
 }
 
 auto BasicBlockBuilder::has_terminator(this BasicBlockBuilder &self) -> bool {
-    return self.get_underlying().terminator_node_id != NodeID::Invalid;
+    if (self.instr_node_ids.empty()) {
+        return false;
+    }
+
+    auto last_instr_id = self.instr_node_ids.back();
+    auto *last_instr = self.module_builder->get_node(last_instr_id);
+    switch (last_instr->kind) {
+        case NodeKind::eReturn:
+        case NodeKind::eKill:
+        case NodeKind::eBranch:
+        case NodeKind::eConditionalBranch:
+        case NodeKind::eMultiwayBranch:
+            return true;
+        default:;
+    }
+
+    return false;
 }
 
-auto BasicBlockBuilder::terminate_branch(this BasicBlockBuilder &self, BasicBlockBuilder &branching_block) -> void {
-    self.terminate_branch(branching_block.node_id);
+auto BasicBlockBuilder::terminate_branch(this BasicBlockBuilder &self, BasicBlockBuilder &branching_block) -> NodeID {
+    return self.terminate_branch(branching_block.node_id);
 }
 
-auto BasicBlockBuilder::terminate_branch(this BasicBlockBuilder &self, NodeID branching_block_id) -> void {
-    auto &underlying_block = self.get_underlying();
-    underlying_block.terminator_node_id = self.make_instr({ .branch_instr = { .next_block_node_id = branching_block_id } });
+auto BasicBlockBuilder::terminate_branch(this BasicBlockBuilder &self, NodeID branching_block_id) -> NodeID {
+    return self.make_instr({ .branch_instr = { .next_block_node_id = branching_block_id } });
 }
 
-auto BasicBlockBuilder::terminate_return(this BasicBlockBuilder &self, ValueKind value_kind) -> void {
-    auto &underlying_block = self.get_underlying();
+auto BasicBlockBuilder::terminate_return(this BasicBlockBuilder &self, ValueKind value_kind) -> NodeID {
     auto returning_node_id = self.module_builder->lower_type(value_kind);
 
     auto return_instr = ReturnInstruction{
         .returning_node_id = returning_node_id,
     };
-    auto return_instr_id = self.make_instr({ .return_instr = return_instr });
 
-    underlying_block.terminator_node_id = return_instr_id;
+    return self.make_instr({ .return_instr = return_instr });
 }
 
 auto BasicBlockBuilder::make_instr(const Node &node) -> NodeID {
@@ -209,7 +254,7 @@ auto BasicBlockBuilder::lower_expression(this BasicBlockBuilder &self, AST::Node
 }
 
 auto BasicBlockBuilder::lower_identifier_expression(this BasicBlockBuilder &self, AST::IdentifierExpression &expression) -> NodeID {
-    auto node_id = self.module_builder->lookup_identifier(expression.identifier_str);
+    auto node_id = self.module_builder->lookup_identifier(expression.identifier);
     if (node_id == NodeID::Invalid) {
         return NodeID::Invalid;
     }
@@ -277,10 +322,8 @@ auto BasicBlockBuilder::lower_binary_op_expression(this BasicBlockBuilder &self,
 auto BasicBlockBuilder::lower_function_call_expression(this BasicBlockBuilder &self, AST::CallFunctionExpression &expression) -> NodeID {
     auto callee_node_id = self.lower_expression(expression.callee_expression_id);
     if (callee_node_id == NodeID::Invalid) {
-        auto *node = self.module_builder->ast_module->get_node(expression.callee_expression_id);
-        DEMIR_EXPECT(node->kind == AST::NodeKind::eIdentifierExpression);
-        auto &identifier_expr = node->identifier_expression;
-        callee_node_id = self.module_builder->reserve_function(identifier_expr.identifier_str);
+        DEMIR_DEBUGBREAK(); // this should never happen
+        return NodeID::Invalid;
     }
 
     auto parameter_node_ids = std::vector<NodeID>();
@@ -299,10 +342,44 @@ auto BasicBlockBuilder::lower_function_call_expression(this BasicBlockBuilder &s
 
 //  ── MODULE BUILDER ──────────────────────────────────────────────────
 
-auto ModuleBuilder::build(this ModuleBuilder &self) -> Module {
-    self.visit(self.ast_module->root_node_id);
+auto ModuleBuilder::build(this ModuleBuilder &self, Span<AST::NodeID> global_ast_node_ids, AST::NodeID entry_point_node_id) -> Module {
+    // Reserve global statements
+    auto global_ir_node_ids = std::vector<NodeID>();
+    for (auto node_id : global_ast_node_ids) {
+        auto *node = self.ast_module->get_node(node_id);
+        switch (node->kind) {
+            case AST::NodeKind::eDeclareVarStatement: {
+                global_ir_node_ids.push_back(self.lower_decl_var_statement(node->decl_var_statement));
+            } break;
+            case AST::NodeKind::eDeclareStructStatement: {
+                global_ir_node_ids.push_back(self.lower_decl_struct_statement(node->decl_struct_statement));
+            } break;
+            case AST::NodeKind::eDeclareFunctionStatement: {
+                global_ir_node_ids.push_back(self.reserve_function(node->decl_function_statement.identifier));
+            } break;
+            default:;
+        }
+    }
 
-    return Module(self.allocator, std::move(self.nodes));
+    // Lower all function in this module (not including entry point)
+    for (auto node_id : global_ast_node_ids) {
+        auto *node = self.ast_module->get_node(node_id);
+        if (node->kind == AST::NodeKind::eDeclareFunctionStatement) {
+            self.lower_decl_function_statement(node->decl_function_statement);
+        }
+    }
+
+    auto entry_point_node = self.ast_module->get_node(entry_point_node_id);
+    auto main_function_node_id = self.reserve_function(entry_point_node->decl_function_statement.identifier);
+    self.visit(entry_point_node_id);
+
+    global_ir_node_ids.insert(
+        global_ir_node_ids.begin(), //
+        std::move_iterator(self.global_node_ids.begin()),
+        std::move_iterator(self.global_node_ids.end())
+    );
+
+    return Module(std::move(self.nodes), std::move(global_ir_node_ids), main_function_node_id);
 }
 
 auto ModuleBuilder::make_node(const Node &node) -> NodeID {
@@ -386,7 +463,7 @@ auto ModuleBuilder::decorate_node(this ModuleBuilder &self, NodeID target_node_i
     };
     auto node_id = self.make_node({ .decoration_node = decoration });
 
-    self.decoration_node_ids.push_back(node_id);
+    self.global_node_ids.push_back(node_id);
 
     return node_id;
 }
@@ -406,14 +483,18 @@ auto ModuleBuilder::decorate_struct_member(
     };
     auto node_id = self.make_node({ .member_decoration_node = member_decoration });
 
-    self.decoration_node_ids.push_back(node_id);
+    self.global_node_ids.push_back(node_id);
 
     return node_id;
 }
 
 auto ModuleBuilder::lower_type(this ModuleBuilder &self, const Type &type) -> NodeID {
-    for (auto type_node_id : self.type_node_ids) {
+    for (auto type_node_id : self.global_node_ids) {
         auto *cur_node = self.get_node(type_node_id);
+        if (cur_node->kind != NodeKind::eType) {
+            continue;
+        }
+
         auto &cur_type = cur_node->type_node;
         if (cur_type.type_kind != type.type_kind) {
             continue;
@@ -444,7 +525,7 @@ auto ModuleBuilder::lower_type(this ModuleBuilder &self, const Type &type) -> No
     }
 
     auto new_type_node_id = self.make_node({ .type_node = type });
-    self.type_node_ids.push_back(new_type_node_id);
+    self.global_node_ids.push_back(new_type_node_id);
 
     return new_type_node_id;
 }
@@ -496,8 +577,12 @@ auto ModuleBuilder::lower_type(this ModuleBuilder &self, ValueKind value_kind) -
 }
 
 auto ModuleBuilder::lower_constant(this ModuleBuilder &self, const Constant &constant) -> NodeID {
-    for (auto cur_const_node_id : self.constant_node_ids) {
+    for (auto cur_const_node_id : self.global_node_ids) {
         auto *cur_node = self.get_node(cur_const_node_id);
+        if (cur_node->kind != NodeKind::eConstant) {
+            continue;
+        }
+
         auto &cur_const = cur_node->constant_node;
         if (cur_const.type_node_id != constant.type_node_id) {
             continue;
@@ -509,9 +594,359 @@ auto ModuleBuilder::lower_constant(this ModuleBuilder &self, const Constant &con
     }
 
     auto new_const_node_id = self.make_node({ .constant_node = constant });
-    self.constant_node_ids.push_back(new_const_node_id);
+    self.global_node_ids.push_back(new_const_node_id);
 
     return new_const_node_id;
+}
+
+auto ModuleBuilder::lower_decl_var_statement(this ModuleBuilder &self, AST::DeclareVarStatement &statement) -> NodeID {
+    auto block_builder = self.acquire_block_builder();
+
+    auto initializer_node_id = NodeID::Invalid;
+    if (statement.initial_expression_id != AST::NodeID::Invalid) {
+        initializer_node_id = block_builder.lower_expression(statement.initial_expression_id);
+    }
+
+    auto var_type_kind = type_identifier_to_value_kind(statement.type_identifier);
+    auto variable_node_id = block_builder.lower_variable(statement.identifier, var_type_kind, initializer_node_id);
+
+    for (const auto &attribute : statement.attributes) {
+        switch (attribute.kind) {
+            case AttributeKind::eBuiltin: {
+                self.decorate_node(variable_node_id, DecorationKind::eBuiltin, DecorationOperand{ .builtin_kind = attribute.builtin_kind });
+            } break;
+            default:;
+        }
+    }
+
+    self.release_block_builder(std::move(block_builder));
+
+    return variable_node_id;
+}
+
+auto ModuleBuilder::lower_decl_function_statement(this ModuleBuilder &self, AST::DeclareFunctionStatement &statement) -> NodeID {
+    //  ── FUNCTION HEADER ─────────────────────────────────────────────────
+    auto param_type_node_ids = std::vector<NodeID>();
+    for (const auto &param : statement.parameters) {
+        auto param_type_kind = type_identifier_to_value_kind(param.type_identifier);
+        param_type_node_ids.push_back(self.lower_type(param_type_kind));
+    }
+
+    auto return_type_kind = type_identifier_to_value_kind(statement.return_type_identifier);
+    auto return_type_node_id = self.lower_type(return_type_kind);
+    auto block_builder = self.make_block_builder();
+
+    // functions are reserved before visiting
+    // this should always return valid value
+    auto func_node_id = self.symbols.lookup(statement.identifier, 0_sz);
+    if (func_node_id.has_value()) {
+        auto *func_node = self.get_node(func_node_id.value());
+        auto &func = func_node->function_node;
+        func.parameter_type_node_ids = self.allocator->copy_into(Span(param_type_node_ids));
+        func.return_type_node_id = return_type_node_id;
+        func.first_basic_block_node_id = block_builder.node_id;
+    }
+
+    //  ── FUNCTION BODY ───────────────────────────────────────────────────
+    self.symbols.push_scope();
+    for (const auto &param : statement.parameters) {
+        auto param_type_kind = type_identifier_to_value_kind(param.type_identifier);
+        block_builder.lower_variable(param.identifier, param_type_kind);
+    }
+
+    self.release_block_builder(std::move(block_builder));
+    self.visit(statement.body_statement_id);
+
+    //  ── FUNCTION FOOTER ─────────────────────────────────────────────────
+    auto last_block_builder = self.acquire_block_builder();
+
+    // Insert implicit return when available
+    if (!last_block_builder.has_terminator()) {
+        last_block_builder.terminate_return(ValueKind::eNone);
+    }
+
+    self.end_block_builder(std::move(last_block_builder));
+    self.symbols.pop_scope();
+
+    // Entry point if available
+    for (const auto &attribute : statement.attributes) {
+        switch (attribute.kind) {
+            case AttributeKind::eShader: {
+                auto entry_point = EntryPoint{
+                    .shader_kind = attribute.shader_kind,
+                    .function_node_id = func_node_id.value(),
+                    .name_str = statement.identifier,
+                };
+
+                self.entry_point_node_id = self.make_node({ .entry_point = entry_point });
+            } break;
+            default:;
+        }
+    }
+
+    return func_node_id.value();
+}
+
+auto ModuleBuilder::lower_return_statement(this ModuleBuilder &self, AST::ReturnStatement &statement) -> NodeID {
+    auto return_expr_type_value = self.ast_module->get_underlying_value(statement.return_expression_id);
+
+    auto block_builder = self.acquire_block_builder();
+    auto terminator_node_id = block_builder.terminate_return(return_expr_type_value.value_or(Value{}).kind);
+    self.end_block_builder(std::move(block_builder));
+
+    return terminator_node_id;
+}
+
+auto ModuleBuilder::lower_expression_statement(this ModuleBuilder &self, AST::ExpressionStatement &statement) -> NodeID {
+    auto block_builder = self.acquire_block_builder();
+    auto node_id = block_builder.lower_expression(statement.expression_id);
+    self.release_block_builder(std::move(block_builder));
+
+    return node_id;
+}
+
+auto ModuleBuilder::lower_while_statement(this ModuleBuilder &self, AST::WhileStatement &statement) -> NodeID {
+    auto block_builder = self.acquire_block_builder();
+
+    //  ── LOOP HEADER ─────────────────────────────────────────────────────
+    auto loop_begin_block_node_id = self.make_block();
+    block_builder.terminate_branch(loop_begin_block_node_id);
+    self.end_block_builder(std::move(block_builder));
+
+    block_builder = self.make_block_builder(loop_begin_block_node_id);
+
+    auto exiting_block_node_id = self.make_block();
+    auto continuing_block_node_id = self.make_block();
+    auto loop_merge_instr = LoopMergeInstruction{
+        .dst_block_node_id = exiting_block_node_id,
+        .continuing_block_node_id = continuing_block_node_id,
+    };
+    auto loop_merge_instr_id = block_builder.make_instr({ .loop_merge_instr = loop_merge_instr });
+
+    //  ── LOOP BODY ───────────────────────────────────────────────────────
+    auto cond_block_node_id = self.make_block();
+    block_builder.terminate_branch(cond_block_node_id);
+    self.end_block_builder(std::move(block_builder));
+    block_builder = self.make_block_builder(cond_block_node_id);
+
+    auto condition_node_id = block_builder.lower_expression(statement.condition_expression_id);
+    auto body_block_node_id = self.make_block();
+    auto cond = ConditionalBranchInstruction::Condition{
+        .condition_node_id = condition_node_id,
+        .true_block_node_id = body_block_node_id,
+    };
+
+    auto conditional_branch_instr = ConditionalBranchInstruction{
+        .conditions = self.allocator->copy_into(Span(&cond, 1)),
+        .false_block_node_id = exiting_block_node_id,
+        .exiting_block_node_id = continuing_block_node_id,
+    };
+    block_builder.make_instr({ .conditional_branch_instr = conditional_branch_instr });
+
+    //  ── LOOP FOOTER ─────────────────────────────────────────────────────
+    self.end_block_builder(std::move(block_builder));
+    block_builder = self.make_block_builder(continuing_block_node_id);
+    block_builder.terminate_branch(loop_begin_block_node_id);
+    self.end_block_builder(std::move(block_builder));
+
+    //  ── STATEMENT BODY ──────────────────────────────────────────────────
+    block_builder = self.make_block_builder(body_block_node_id);
+    self.release_block_builder(std::move(block_builder));
+
+    self.push_scope(continuing_block_node_id, exiting_block_node_id);
+    self.visit(statement.body_statement_id);
+    self.pop_scope();
+
+    block_builder = self.acquire_block_builder();
+    if (!block_builder.has_terminator()) {
+        block_builder.terminate_branch(continuing_block_node_id);
+    }
+    self.end_block_builder(std::move(block_builder));
+
+    block_builder = self.make_block_builder(exiting_block_node_id);
+    self.release_block_builder(std::move(block_builder));
+
+    return loop_merge_instr_id;
+}
+
+auto ModuleBuilder::lower_branch_statement(this ModuleBuilder &self, AST::BranchStatement &statement) -> NodeID {
+    auto block_builder = self.acquire_block_builder();
+
+    //  ── CONDITION HEADER ────────────────────────────────────────────────
+    auto condition_block_ids = std::vector<ConditionalBranchInstruction::Condition>();
+    for (const auto &cond : statement.conditions) {
+        auto block_node_id = self.make_block();
+        auto condition_instr = block_builder.lower_expression(cond.condition_expression_id);
+        condition_block_ids.push_back({ .condition_node_id = condition_instr, .true_block_node_id = block_node_id });
+    }
+
+    auto exiting_block_node_id = self.make_block();
+    auto false_case_block_node_id = exiting_block_node_id;
+    if (statement.false_case_statement_id != AST::NodeID::Invalid) {
+        false_case_block_node_id = self.make_block();
+    }
+
+    block_builder.make_instr({ .selection_merge_instr = { .dst_block_node_id = exiting_block_node_id } });
+    auto conditional_branch_instr = ConditionalBranchInstruction{
+        .conditions = self.allocator->copy_into(Span(condition_block_ids)),
+        .false_block_node_id = false_case_block_node_id,
+        .exiting_block_node_id = exiting_block_node_id,
+    };
+    auto conditional_branch_instr_id = block_builder.make_instr({ .conditional_branch_instr = conditional_branch_instr });
+
+    //  ── CONDITION BODY ──────────────────────────────────────────────────
+    // carry over current markers
+    auto [begin_marker_node_id, end_marker_node_id] = self.symbols.current_scope_markers();
+
+    for (const auto &[statement_cond, instr_cond] : std::views::zip(statement.conditions, conditional_branch_instr.conditions)) {
+        self.end_block_builder(std::move(block_builder));
+        block_builder = self.make_block_builder(instr_cond.true_block_node_id);
+        self.release_block_builder(std::move(block_builder));
+
+        self.push_scope(begin_marker_node_id, end_marker_node_id);
+        self.visit(statement_cond.true_case_statement_id);
+        self.pop_scope();
+
+        block_builder = self.acquire_block_builder();
+        if (!block_builder.has_terminator()) {
+            block_builder.terminate_branch(exiting_block_node_id);
+        }
+        self.end_block_builder(std::move(block_builder));
+    }
+
+    if (statement.false_case_statement_id != AST::NodeID::Invalid) {
+        block_builder = self.make_block_builder(false_case_block_node_id);
+        self.release_block_builder(std::move(block_builder));
+
+        self.push_scope(begin_marker_node_id, end_marker_node_id);
+        self.visit(statement.false_case_statement_id);
+        self.pop_scope();
+
+        block_builder = self.acquire_block_builder();
+        if (!block_builder.has_terminator()) {
+            block_builder.terminate_branch(exiting_block_node_id);
+        }
+        self.end_block_builder(std::move(block_builder));
+    }
+
+    block_builder = self.make_block_builder(exiting_block_node_id);
+    self.release_block_builder(std::move(block_builder));
+
+    return conditional_branch_instr_id;
+}
+
+auto ModuleBuilder::lower_multiway_branch_statement(this ModuleBuilder &self, AST::MultiwayBranchStatement &statement) -> NodeID {
+    auto block_builder = self.acquire_block_builder();
+
+    //  ── SWITCH HEADER ───────────────────────────────────────────────────
+    auto branches = std::vector<MultiwayBranchInstruction::Branch>();
+    for (const auto &branch : statement.branches) {
+        auto expr_value = self.ast_module->get_underlying_value(branch.expression_id).value();
+        auto branch_block_node_id = self.make_block();
+
+        branches.push_back({ .literal = expr_value.i64_val, .target_block_id = branch_block_node_id });
+    }
+
+    auto exiting_block_node_id = self.make_block();
+    auto selector_node_id = block_builder.lower_expression(statement.selector_expression_id);
+    auto default_block_node_id = self.make_block();
+
+    block_builder.make_instr({ .selection_merge_instr = { .dst_block_node_id = exiting_block_node_id } });
+
+    auto multiway_branch_instr = MultiwayBranchInstruction{
+        .selector_node_id = selector_node_id,
+        .default_block_node_id = default_block_node_id,
+        .branches = self.allocator->copy_into(Span(branches)),
+    };
+    auto multiway_branch_instr_id = block_builder.make_instr({ .multiway_branch_instr = multiway_branch_instr });
+    self.end_block_builder(std::move(block_builder));
+
+    //  ── SWITCH BODY ─────────────────────────────────────────────────────
+    // start with default statement first
+    block_builder = self.make_block_builder(default_block_node_id);
+    self.release_block_builder(std::move(block_builder));
+
+    self.push_scope(NodeID::Invalid, exiting_block_node_id);
+    self.visit(statement.default_statement_id);
+    self.pop_scope();
+
+    block_builder = self.acquire_block_builder();
+    if (!block_builder.has_terminator()) {
+        block_builder.terminate_branch(exiting_block_node_id);
+    }
+    self.end_block_builder(std::move(block_builder));
+
+    for (const auto &[branch_statement, branch_instr] : std::views::zip(statement.branches, branches)) {
+        block_builder = self.make_block_builder(branch_instr.target_block_id);
+        self.release_block_builder(std::move(block_builder));
+
+        self.push_scope(NodeID::Invalid, exiting_block_node_id);
+        self.visit(branch_statement.statement_id);
+        self.pop_scope();
+
+        block_builder = self.acquire_block_builder();
+        if (!block_builder.has_terminator()) {
+            block_builder.terminate_branch(exiting_block_node_id);
+        }
+        self.end_block_builder(std::move(block_builder));
+    }
+
+    block_builder = self.make_block_builder(exiting_block_node_id);
+    self.release_block_builder(std::move(block_builder));
+
+    return multiway_branch_instr_id;
+}
+
+auto ModuleBuilder::lower_break_statement(this ModuleBuilder &self, AST::BreakStatement &) -> NodeID {
+    auto [begin_marker_node_id, end_marker_node_id] = self.symbols.current_scope_markers();
+
+    auto block_builder = self.acquire_block_builder();
+    auto terminator_node_id = block_builder.terminate_branch(end_marker_node_id);
+    self.end_block_builder(std::move(block_builder));
+
+    return terminator_node_id;
+}
+
+auto ModuleBuilder::lower_continue_statement(this ModuleBuilder &self, AST::ContinueStatement &) -> NodeID {
+    auto [begin_marker_node_id, end_marker_node_id] = self.symbols.current_scope_markers();
+
+    auto block_builder = self.acquire_block_builder();
+    auto terminator_node_id = block_builder.terminate_branch(begin_marker_node_id);
+    self.end_block_builder(std::move(block_builder));
+
+    return terminator_node_id;
+}
+
+auto ModuleBuilder::lower_decl_struct_statement(this ModuleBuilder &self, AST::DeclareStructStatement &statement) -> NodeID {
+    auto struct_layout_kind = LayoutKind::eScalar;
+    for (const auto &attrib : statement.attributes) {
+        switch (attrib.kind) {
+            case AttributeKind::eLayout: {
+                struct_layout_kind = attrib.layout_kind;
+            } break;
+            default:;
+        }
+    }
+
+    auto field_types = std::vector<NodeID>();
+    for (const auto &field : statement.fields) {
+        auto field_type_kind = type_identifier_to_value_kind(field.type_identifier);
+        field_types.push_back(self.lower_type(field_type_kind));
+    }
+
+    auto struct_node = Struct{
+        .field_type_node_ids = self.allocator->copy_into(Span(field_types)),
+    };
+    auto struct_node_id = self.make_node({ .struct_node = struct_node });
+
+    auto struct_layout = StructLayout(struct_layout_kind);
+    for (const auto &[field, member_index] : std::views::zip(statement.fields, std::views::iota(0_sz))) {
+        auto field_type_kind = type_identifier_to_value_kind(field.type_identifier);
+        auto field_offset = struct_layout.add_field(field_type_kind);
+        self.decorate_struct_member(struct_node_id, member_index, DecorationKind::eOffset, DecorationOperand{ .byte_offset = field_offset });
+    }
+
+    return struct_node_id;
 }
 
 auto ModuleBuilder::visit(AST::MultiStatement &statement) -> void {
@@ -521,315 +956,43 @@ auto ModuleBuilder::visit(AST::MultiStatement &statement) -> void {
 }
 
 auto ModuleBuilder::visit(AST::DeclareVarStatement &statement) -> void {
-    auto block_builder = this->acquire_block_builder();
-
-    auto initializer_node_id = NodeID::Invalid;
-    if (statement.initial_expression_id != AST::NodeID::Invalid) {
-        initializer_node_id = block_builder.lower_expression(statement.initial_expression_id);
-    }
-    auto variable_node_id = block_builder.lower_variable(statement.identifier_str, statement.value_kind, initializer_node_id);
-
-    for (const auto &attribute : statement.attributes) {
-        switch (attribute.kind) {
-            case AttributeKind::eBuiltin: {
-                this->decorate_node(variable_node_id, DecorationKind::eBuiltin, DecorationOperand{ .builtin_kind = attribute.builtin_kind });
-            } break;
-            default:;
-        }
-    }
-
-    this->release_block_builder(std::move(block_builder));
+    this->lower_decl_var_statement(statement);
 }
 
 auto ModuleBuilder::visit(AST::DeclareFunctionStatement &statement) -> void {
-    //  ── FUNCTION HEADER ─────────────────────────────────────────────────
-    auto param_type_node_ids = std::vector<NodeID>();
-    for (const auto &param : statement.parameters) {
-        param_type_node_ids.push_back(this->lower_type(param.value_kind));
-    }
-
-    auto return_type_node_id = this->lower_type(statement.return_value_kind);
-    auto block_builder = this->make_block_builder();
-    auto func_node_id = NodeID::Invalid;
-    auto reserved_func_node_id = this->symbols.lookup(statement.identifier_str, 0_sz);
-    if (reserved_func_node_id.has_value()) {
-        auto *reserve_func_node = this->get_node(reserved_func_node_id.value());
-        auto &reserved_func = reserve_func_node->function_node;
-        reserved_func.parameter_type_node_ids = this->allocator->copy_into(Span(param_type_node_ids));
-        reserved_func.return_type_node_id = return_type_node_id;
-        reserved_func.first_basic_block_node_id = block_builder.node_id;
-
-        func_node_id = reserved_func_node_id.value();
-    } else {
-        auto function = Function{
-            .parameter_type_node_ids = this->allocator->copy_into(Span(param_type_node_ids)),
-            .return_type_node_id = return_type_node_id,
-            .first_basic_block_node_id = block_builder.node_id,
-        };
-        func_node_id = this->make_node({ .function_node = function });
-        this->symbols.add_symbol(statement.identifier_str, func_node_id, 0_sz);
-    }
-
-    //  ── FUNCTION BODY ───────────────────────────────────────────────────
-    this->symbols.push_scope();
-    for (const auto &param : statement.parameters) {
-        block_builder.lower_variable(param.identifier_str, param.value_kind);
-    }
-
-    this->release_block_builder(std::move(block_builder));
-    this->visit(statement.body_statement_id);
-
-    //  ── FUNCTION FOOTER ─────────────────────────────────────────────────
-    auto last_block_builder = this->acquire_block_builder();
-    auto &last_block = last_block_builder.get_underlying();
-
-    // Insert implicit return when available
-    if (last_block.terminator_node_id == NodeID::Invalid) {
-        auto *func_node = this->get_node(func_node_id);
-        auto &lowered_func = func_node->function_node;
-        auto void_type_id = this->lower_type(Type{ .type_kind = TypeKind::eVoid });
-        DEMIR_EXPECT(lowered_func.return_type_node_id == void_type_id);
-
-        last_block.terminator_node_id = last_block_builder.make_instr({ .return_instr = { .returning_node_id = void_type_id } });
-    }
-
-    this->end_block_builder(std::move(last_block_builder));
-    this->symbols.pop_scope();
+    this->lower_decl_function_statement(statement);
 }
 
 auto ModuleBuilder::visit(AST::ReturnStatement &statement) -> void {
-    auto return_expr_type_value = this->ast_module->get_underlying_value(statement.return_expression_id);
-
-    auto block_builder = this->acquire_block_builder();
-    block_builder.terminate_return(return_expr_type_value.value_or(Value{}).kind);
-    this->end_block_builder(std::move(block_builder));
+    this->lower_return_statement(statement);
 }
 
 auto ModuleBuilder::visit(AST::ExpressionStatement &statement) -> void {
-    auto block_builder = this->acquire_block_builder();
-    block_builder.lower_expression(statement.expression_id);
-    this->release_block_builder(std::move(block_builder));
+    this->lower_expression_statement(statement);
 }
 
 auto ModuleBuilder::visit(AST::WhileStatement &statement) -> void {
-    auto block_builder = this->acquire_block_builder();
-
-    //  ── LOOP HEADER ─────────────────────────────────────────────────────
-    auto loop_begin_block_node_id = this->make_block();
-    block_builder.terminate_branch(loop_begin_block_node_id);
-    this->end_block_builder(std::move(block_builder));
-
-    block_builder = this->make_block_builder(loop_begin_block_node_id);
-
-    auto exiting_block_node_id = this->make_block();
-    auto continuing_block_node_id = this->make_block();
-    auto loop_merge_instr = LoopMergeInstruction{
-        .dst_block_node_id = exiting_block_node_id,
-        .continuing_block_node_id = continuing_block_node_id,
-    };
-    block_builder.make_instr({ .loop_merge_instr = loop_merge_instr });
-
-    //  ── LOOP BODY ───────────────────────────────────────────────────────
-    auto cond_block_node_id = this->make_block();
-    block_builder.terminate_branch(cond_block_node_id);
-    this->end_block_builder(std::move(block_builder));
-    block_builder = this->make_block_builder(cond_block_node_id);
-
-    auto condition_node_id = block_builder.lower_expression(statement.condition_expression_id);
-    auto body_block_node_id = this->make_block();
-    auto cond = ConditionalBranchInstruction::Condition{
-        .condition_node_id = condition_node_id,
-        .true_block_node_id = body_block_node_id,
-    };
-
-    auto conditional_branch_instr = ConditionalBranchInstruction{
-        .conditions = this->allocator->copy_into(Span(&cond, 1)),
-        .false_block_node_id = exiting_block_node_id,
-        .exiting_block_node_id = continuing_block_node_id,
-    };
-    block_builder.make_instr({ .conditional_branch_instr = conditional_branch_instr });
-
-    //  ── LOOP FOOTER ─────────────────────────────────────────────────────
-    this->end_block_builder(std::move(block_builder));
-    block_builder = this->make_block_builder(continuing_block_node_id);
-    block_builder.terminate_branch(loop_begin_block_node_id);
-    this->end_block_builder(std::move(block_builder));
-
-    //  ── STATEMENT BODY ──────────────────────────────────────────────────
-    block_builder = this->make_block_builder(body_block_node_id);
-    this->release_block_builder(std::move(block_builder));
-
-    this->push_scope(continuing_block_node_id, exiting_block_node_id);
-    this->visit(statement.body_statement_id);
-    this->pop_scope();
-
-    block_builder = this->acquire_block_builder();
-    if (!block_builder.has_terminator()) {
-        block_builder.terminate_branch(continuing_block_node_id);
-    }
-    this->end_block_builder(std::move(block_builder));
-
-    block_builder = this->make_block_builder(exiting_block_node_id);
-    this->release_block_builder(std::move(block_builder));
+    this->lower_while_statement(statement);
 }
 
 auto ModuleBuilder::visit(AST::BranchStatement &statement) -> void {
-    auto block_builder = this->acquire_block_builder();
-
-    //  ── CONDITION HEADER ────────────────────────────────────────────────
-    auto condition_block_ids = std::vector<ConditionalBranchInstruction::Condition>();
-    for (const auto &cond : statement.conditions) {
-        auto block_node_id = this->make_block();
-        auto condition_instr = block_builder.lower_expression(cond.condition_expression_id);
-        condition_block_ids.push_back({ .condition_node_id = condition_instr, .true_block_node_id = block_node_id });
-    }
-
-    auto exiting_block_node_id = this->make_block();
-    auto false_case_block_node_id = exiting_block_node_id;
-    if (statement.false_case_statement_id != AST::NodeID::Invalid) {
-        false_case_block_node_id = this->make_block();
-    }
-
-    block_builder.make_instr({ .selection_merge_instr = { .dst_block_node_id = exiting_block_node_id } });
-    auto conditional_branch_instr = ConditionalBranchInstruction{
-        .conditions = this->allocator->copy_into(Span(condition_block_ids)),
-        .false_block_node_id = false_case_block_node_id,
-        .exiting_block_node_id = exiting_block_node_id,
-    };
-    block_builder.make_instr({ .conditional_branch_instr = conditional_branch_instr });
-
-    //  ── CONDITION BODY ──────────────────────────────────────────────────
-    // carry over current markers
-    auto [begin_marker_node_id, end_marker_node_id] = this->symbols.current_scope_markers();
-
-    for (const auto &[statement_cond, instr_cond] : std::views::zip(statement.conditions, conditional_branch_instr.conditions)) {
-        this->end_block_builder(std::move(block_builder));
-        block_builder = this->make_block_builder(instr_cond.true_block_node_id);
-        this->release_block_builder(std::move(block_builder));
-
-        this->push_scope(begin_marker_node_id, end_marker_node_id);
-        this->visit(statement_cond.true_case_statement_id);
-        this->pop_scope();
-
-        block_builder = this->acquire_block_builder();
-        if (!block_builder.has_terminator()) {
-            block_builder.terminate_branch(exiting_block_node_id);
-        }
-        this->end_block_builder(std::move(block_builder));
-    }
-
-    if (statement.false_case_statement_id != AST::NodeID::Invalid) {
-        block_builder = this->make_block_builder(false_case_block_node_id);
-        this->release_block_builder(std::move(block_builder));
-
-        this->push_scope(begin_marker_node_id, end_marker_node_id);
-        this->visit(statement.false_case_statement_id);
-        this->pop_scope();
-
-        block_builder = this->acquire_block_builder();
-        if (!block_builder.has_terminator()) {
-            block_builder.terminate_branch(exiting_block_node_id);
-        }
-        this->end_block_builder(std::move(block_builder));
-    }
-
-    block_builder = this->make_block_builder(exiting_block_node_id);
-    this->release_block_builder(std::move(block_builder));
+    this->lower_branch_statement(statement);
 }
 
 auto ModuleBuilder::visit(AST::MultiwayBranchStatement &statement) -> void {
-    auto block_builder = this->acquire_block_builder();
-
-    //  ── SWITCH HEADER ───────────────────────────────────────────────────
-    auto branches = std::vector<MultiwayBranchInstruction::Branch>();
-    for (const auto &branch : statement.branches) {
-        auto expr_value = this->ast_module->get_underlying_value(branch.expression_id).value();
-        auto branch_block_node_id = this->make_block();
-
-        branches.push_back({ .literal = expr_value.i64_val, .target_block_id = branch_block_node_id });
-    }
-
-    auto exiting_block_node_id = this->make_block();
-    auto selector_node_id = block_builder.lower_expression(statement.selector_expression_id);
-    auto default_block_node_id = this->make_block();
-
-    block_builder.make_instr({ .selection_merge_instr = { .dst_block_node_id = exiting_block_node_id } });
-
-    auto multiway_branch_instr = MultiwayBranchInstruction{
-        .selector_node_id = selector_node_id,
-        .default_block_node_id = default_block_node_id,
-        .branches = this->allocator->copy_into(Span(branches)),
-    };
-    block_builder.make_instr({ .multiway_branch_instr = multiway_branch_instr });
-    this->end_block_builder(std::move(block_builder));
-
-    //  ── SWITCH BODY ─────────────────────────────────────────────────────
-    // start with default statement first
-    block_builder = this->make_block_builder(default_block_node_id);
-    this->release_block_builder(std::move(block_builder));
-
-    this->push_scope(NodeID::Invalid, exiting_block_node_id);
-    this->visit(statement.default_statement_id);
-    this->pop_scope();
-
-    block_builder = this->acquire_block_builder();
-    if (!block_builder.has_terminator()) {
-        block_builder.terminate_branch(exiting_block_node_id);
-    }
-    this->end_block_builder(std::move(block_builder));
-
-    for (const auto &[branch_statement, branch_instr] : std::views::zip(statement.branches, branches)) {
-        block_builder = this->make_block_builder(branch_instr.target_block_id);
-        this->release_block_builder(std::move(block_builder));
-
-        this->push_scope(NodeID::Invalid, exiting_block_node_id);
-        this->visit(branch_statement.statement_id);
-        this->pop_scope();
-
-        block_builder = this->acquire_block_builder();
-        if (!block_builder.has_terminator()) {
-            block_builder.terminate_branch(exiting_block_node_id);
-        }
-        this->end_block_builder(std::move(block_builder));
-    }
-
-    block_builder = this->make_block_builder(exiting_block_node_id);
-    this->release_block_builder(std::move(block_builder));
+    this->lower_multiway_branch_statement(statement);
 }
 
-auto ModuleBuilder::visit(AST::BreakStatement &) -> void {
-    auto [begin_marker_node_id, end_marker_node_id] = this->symbols.current_scope_markers();
-
-    auto block_builder = this->acquire_block_builder();
-    block_builder.terminate_branch(end_marker_node_id);
-    this->end_block_builder(std::move(block_builder));
+auto ModuleBuilder::visit(AST::BreakStatement &statement) -> void {
+    this->lower_break_statement(statement);
 }
 
-auto ModuleBuilder::visit(AST::ContinueStatement &) -> void {
-    auto [begin_marker_node_id, end_marker_node_id] = this->symbols.current_scope_markers();
-
-    auto block_builder = this->acquire_block_builder();
-    block_builder.terminate_branch(begin_marker_node_id);
-    this->end_block_builder(std::move(block_builder));
+auto ModuleBuilder::visit(AST::ContinueStatement &statement) -> void {
+    this->lower_continue_statement(statement);
 }
 
 auto ModuleBuilder::visit(AST::DeclareStructStatement &statement) -> void {
-    auto field_types = std::vector<NodeID>();
-    for (const auto &field : statement.fields) {
-        field_types.push_back(this->lower_type(field.value_kind));
-    }
-
-    auto struct_node = Struct{
-        .field_type_node_ids = this->allocator->copy_into(Span(field_types)),
-    };
-
-    auto struct_node_id = this->make_node({ .struct_node = struct_node });
-
-    auto struct_layout = StructLayout(statement.layout);
-    for (const auto &[field, member_index] : std::views::zip(statement.fields, std::views::iota(0_sz))) {
-        auto field_offset = struct_layout.add_field(field.value_kind);
-        this->decorate_struct_member(struct_node_id, member_index, DecorationKind::eOffset, DecorationOperand{ .byte_offset = field_offset });
-    }
+    this->lower_decl_struct_statement(statement);
 }
 
 //  ── MODULE ──────────────────────────────────────────────────────────
@@ -841,6 +1004,49 @@ auto Module::get_node(this Module &self, NodeID node_id) -> Node * {
     }
 
     return &self.nodes[node_index];
+}
+
+auto lower_ast_module(BumpAllocator *allocator, AST::Module *ast_module) -> std::vector<Module> {
+    auto entry_point_node_ids = std::vector<AST::NodeID>();
+    auto global_ast_node_ids = std::vector<AST::NodeID>();
+
+    auto global_visitor = [&](this auto &visitor, AST::NodeID node_id) -> void {
+        auto *node = ast_module->get_node(node_id);
+        switch (node->kind) {
+            case AST::NodeKind::eMultiStatement: {
+                for (auto v : node->multi_statement.statement_ids) {
+                    visitor(v);
+                }
+            } break;
+            case AST::NodeKind::eDeclareVarStatement:
+            case AST::NodeKind::eDeclareStructStatement: {
+                global_ast_node_ids.push_back(node_id);
+            } break;
+            case AST::NodeKind::eDeclareFunctionStatement: {
+                auto &statement = node->decl_function_statement;
+                auto entry_point_iter = std::ranges::find_if(statement.attributes, [](const Attribute &attrib) { //
+                    return attrib.kind == AttributeKind::eShader;
+                });
+                auto is_entry_point = entry_point_iter != statement.attributes.end();
+                if (is_entry_point) {
+                    entry_point_node_ids.push_back(node_id);
+                } else {
+                    global_ast_node_ids.push_back(node_id);
+                }
+            } break;
+            default:;
+        }
+    };
+
+    global_visitor(ast_module->root_node_id);
+
+    auto modules = std::vector<Module>();
+    for (auto node_id : entry_point_node_ids) {
+        auto module_builder = ModuleBuilder(allocator, ast_module);
+        modules.push_back(module_builder.build(Span(global_ast_node_ids), node_id));
+    }
+
+    return modules;
 }
 
 } // namespace demir::IR

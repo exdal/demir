@@ -30,8 +30,7 @@ private:
     auto expect(this Parser &, TokenKind kind) -> const Token &;
     auto next(this Parser &) -> const Token &;
 
-    auto parse_identifier_str(this Parser &) -> std::string_view;
-    auto parse_intrinsic_type(this Parser &) -> ValueKind;
+    auto parse_identifier(this Parser &) -> std::string_view;
     auto parse_attributes(this Parser &) -> std::vector<Attribute>;
 
     auto parse_statement(this Parser &, bool root = false) -> AST::NodeID;

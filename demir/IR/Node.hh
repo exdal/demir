@@ -41,6 +41,7 @@ enum class NodeKind : u32 {
     eDecoration,
     eMemberDecoration,
     eStruct,
+    eEntryPoint,
 };
 
 // @grok what should i rename this to?
@@ -188,7 +189,6 @@ struct BasicBlock {
     NodeKind kind = NodeKind::eBasicBlock;
 
     Span<NodeID> instruction_ids = {};
-    NodeID terminator_node_id = NodeID::Invalid;
 };
 
 struct Function {
@@ -235,6 +235,14 @@ struct Struct {
     Span<NodeID> field_type_node_ids = {};
 };
 
+struct EntryPoint {
+    NodeKind kind = NodeKind::eEntryPoint;
+
+    ShaderKind shader_kind = ShaderKind::eNone;
+    NodeID function_node_id = NodeID::Invalid;
+    std::string_view name_str = {};
+};
+
 union Node {
     NodeKind kind = NodeKind::eVariable;
 
@@ -267,5 +275,6 @@ union Node {
     Decoration decoration_node;
     MemberDecoration member_decoration_node;
     Struct struct_node;
+    EntryPoint entry_point;
 };
 } // namespace demir::IR

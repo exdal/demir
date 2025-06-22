@@ -1,8 +1,9 @@
 #pragma once
 
+#include "demir/demir.hh"
+
 #include "demir/Core/Compiler.hh"
 #include "demir/Core/Span.hh"
-#include "demir/demir.hh"
 
 #include <string_view>
 

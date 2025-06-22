@@ -78,6 +78,7 @@ enum class AttributeKind : u32 {
     eBuiltin, // args: "builtin_kind"
     eThreads, // args: vec3u(x, y, z)
     eLayout, // args: "layout_kind"
+    ePushConstants,
 };
 
 enum class ShaderKind : u32 {
@@ -162,7 +163,6 @@ struct Value {
         const c8 *str_val;
         bool bool_val;
     };
-
 };
 
 template<typename T, usize N>

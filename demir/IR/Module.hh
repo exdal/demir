@@ -18,9 +18,9 @@ struct BasicBlockBuilder {
     auto get_underlying(this BasicBlockBuilder &) -> BasicBlock &;
     auto has_terminator(this BasicBlockBuilder &) -> bool;
 
-    auto terminate_branch(this BasicBlockBuilder &, BasicBlockBuilder &branching_block) -> void;
-    auto terminate_branch(this BasicBlockBuilder &, NodeID branching_block_id) -> void;
-    auto terminate_return(this BasicBlockBuilder &, ValueKind value_kind) -> void;
+    auto terminate_branch(this BasicBlockBuilder &, BasicBlockBuilder &branching_block) -> NodeID;
+    auto terminate_branch(this BasicBlockBuilder &, NodeID branching_block_id) -> NodeID;
+    auto terminate_return(this BasicBlockBuilder &, ValueKind value_kind) -> NodeID;
 
     auto make_instr(const Node &node) -> NodeID;
 
@@ -45,19 +45,18 @@ struct ModuleBuilder : AST::StatementVisitor {
 
     BumpAllocator *allocator = nullptr;
     AST::Module *ast_module = nullptr;
+    NodeID entry_point_node_id = NodeID::Invalid;
 
     std::vector<Node> nodes = {};
     SymbolMap<std::string_view, NodeID, NodeID> symbols = {};
 
-    std::vector<NodeID> type_node_ids = {};
-    std::vector<NodeID> constant_node_ids = {};
-    std::vector<NodeID> decoration_node_ids = {};
+    std::vector<NodeID> global_node_ids = {};
 
     Option<BasicBlockBuilder> active_block_builder = nullopt;
 
     ModuleBuilder(BumpAllocator *allocator_, AST::Module *ast_module_) : AST::StatementVisitor(ast_module_), allocator(allocator_), ast_module(ast_module_) {};
 
-    auto build(this ModuleBuilder &) -> Module;
+    auto build(this ModuleBuilder &, Span<AST::NodeID> global_ast_node_ids, AST::NodeID entry_point_node_id) -> Module;
 
     auto make_node(const Node &node) -> NodeID;
     auto get_node(this ModuleBuilder &, NodeID node_id) -> Node *;
@@ -80,6 +79,16 @@ struct ModuleBuilder : AST::StatementVisitor {
     auto lower_type(this ModuleBuilder &, const Type &type) -> NodeID;
     auto lower_type(this ModuleBuilder &, ValueKind value_kind) -> NodeID;
     auto lower_constant(this ModuleBuilder &, const Constant &constant) -> NodeID;
+    auto lower_decl_var_statement(this ModuleBuilder &, AST::DeclareVarStatement &statement) -> NodeID;
+    auto lower_decl_function_statement(this ModuleBuilder &, AST::DeclareFunctionStatement &statement) -> NodeID;
+    auto lower_return_statement(this ModuleBuilder &, AST::ReturnStatement &statement) -> NodeID;
+    auto lower_expression_statement(this ModuleBuilder &, AST::ExpressionStatement &statement) -> NodeID;
+    auto lower_while_statement(this ModuleBuilder &, AST::WhileStatement &statement) -> NodeID;
+    auto lower_branch_statement(this ModuleBuilder &, AST::BranchStatement &statement) -> NodeID;
+    auto lower_multiway_branch_statement(this ModuleBuilder &, AST::MultiwayBranchStatement &statement) -> NodeID;
+    auto lower_break_statement(this ModuleBuilder &, AST::BreakStatement &statement) -> NodeID;
+    auto lower_continue_statement(this ModuleBuilder &, AST::ContinueStatement &statement) -> NodeID;
+    auto lower_decl_struct_statement(this ModuleBuilder &, AST::DeclareStructStatement &statement) -> NodeID;
 
     //  ── AST VISITOR ─────────────────────────────────────────────────────
     auto visit(AST::MultiStatement &) -> void override;
@@ -96,13 +105,19 @@ struct ModuleBuilder : AST::StatementVisitor {
 };
 
 struct Module {
-    BumpAllocator *allocator = nullptr;
     std::vector<Node> nodes = {};
+    std::vector<NodeID> global_nodes = {};
+    NodeID entry_point_node_id = NodeID::Invalid;
 
     Module() = default;
-    Module(BumpAllocator *allocator_, std::vector<Node> nodes_) : allocator(allocator_), nodes(std::move(nodes_)) {}
+    Module(std::vector<Node> nodes_, std::vector<NodeID> global_nodes_, NodeID entry_point_node_id_) :
+        nodes(std::move(nodes_)),
+        global_nodes(std::move(global_nodes_)),
+        entry_point_node_id(entry_point_node_id_) {}
 
     auto get_node(this Module &, NodeID node_id) -> Node *;
 };
+
+auto lower_ast_module(BumpAllocator *allocator, AST::Module *ast_module) -> std::vector<Module>;
 
 } // namespace demir::IR
