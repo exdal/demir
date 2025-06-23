@@ -3,30 +3,24 @@
 #include "demir/IR/Module.hh"
 
 #include <ankerl/unordered_dense.h>
-#include <queue>
+#include <ranges>
+#include <stack>
 
 namespace demir::IR {
 Visitor::Visitor(Module *module_) : module(module_) {}
 
 auto Visitor::visit(NodeID node_id) -> void {
-    auto queue = std::queue<NodeID>();
+    auto dfs_stack = std::stack<NodeID>();
     auto visited_nodes = ankerl::unordered_dense::set<NodeID>();
 
-    queue.push(node_id);
-    visited_nodes.emplace(node_id);
+    dfs_stack.push(node_id);
 
-    auto maybe_visit_next = [&](NodeID next_node_id) -> void {
-        if (!visited_nodes.contains(next_node_id)) {
-            queue.push(next_node_id);
-        }
-    };
-
-    while (!queue.empty()) {
-        auto cur_node_id = queue.front();
+    while (!dfs_stack.empty()) {
+        auto cur_node_id = dfs_stack.top();
         auto *cur_node = this->module->get_node(cur_node_id);
-        queue.pop();
+        dfs_stack.pop();
 
-        if (cur_node == nullptr) {
+        if (cur_node == nullptr || visited_nodes.contains(cur_node_id)) {
             continue;
         }
 
@@ -35,22 +29,24 @@ auto Visitor::visit(NodeID node_id) -> void {
         switch (cur_node->kind) {
             case NodeKind::eBranch: {
                 this->visit(cur_node->branch_instr, cur_node_id);
-                maybe_visit_next(cur_node->branch_instr.next_block_node_id);
+                dfs_stack.push(cur_node->branch_instr.next_block_node_id);
             } break;
             case NodeKind::eConditionalBranch: {
-                this->visit(cur_node->conditional_branch_instr, cur_node_id);
-                for (const auto &v : cur_node->conditional_branch_instr.conditions) {
-                    maybe_visit_next(v.true_block_node_id);
+                auto &instr = cur_node->conditional_branch_instr;
+                this->visit(instr, cur_node_id);
+                for (const auto &v : instr.conditions | std::views::reverse) {
+                    dfs_stack.push(v.true_block_node_id);
                 }
 
-                maybe_visit_next(cur_node->conditional_branch_instr.false_block_node_id);
-                maybe_visit_next(cur_node->conditional_branch_instr.exiting_block_node_id);
+                dfs_stack.push(instr.false_block_node_id);
+                dfs_stack.push(instr.exiting_block_node_id);
             } break;
             case NodeKind::eMultiwayBranch: {
-                this->visit(cur_node->multiway_branch_instr, cur_node_id);
-                maybe_visit_next(cur_node->multiway_branch_instr.default_block_node_id);
-                for (const auto &v : cur_node->multiway_branch_instr.branches) {
-                    maybe_visit_next(v.target_block_id);
+                auto &instr = cur_node->multiway_branch_instr;
+                this->visit(instr, cur_node_id);
+                dfs_stack.push(instr.default_block_node_id);
+                for (const auto &v : instr.branches | std::views::reverse) {
+                    dfs_stack.push(v.target_block_id);
                 }
             } break;
             case NodeKind::eNoOp: {
@@ -65,8 +61,9 @@ auto Visitor::visit(NodeID node_id) -> void {
             case NodeKind::eSelectionMerge: {
                 this->visit(cur_node->selection_merge_instr, cur_node_id);
             } break;
-            case NodeKind::eLoopMerge:
-                break;
+            case NodeKind::eLoopMerge: {
+                this->visit(cur_node->loop_merge_instr, cur_node_id);
+            } break;
             case NodeKind::eLoad: {
                 this->visit(cur_node->load_instr, cur_node_id);
             } break;
@@ -116,14 +113,15 @@ auto Visitor::visit(NodeID node_id) -> void {
                 this->visit(cur_node->variable_node, cur_node_id);
             } break;
             case NodeKind::eBasicBlock: {
-                this->visit(cur_node->basic_block_node, cur_node_id);
-                for (auto node_id : cur_node->basic_block_node.instruction_ids) {
-                    maybe_visit_next(node_id);
+                auto &basic_block = cur_node->basic_block_node;
+                this->visit(basic_block, cur_node_id);
+                for (auto v : basic_block.instruction_ids | std::views::reverse) {
+                    dfs_stack.push(v);
                 }
             } break;
             case NodeKind::eFunction: {
                 this->visit(cur_node->function_node, cur_node_id);
-                maybe_visit_next(cur_node->function_node.first_basic_block_node_id);
+                dfs_stack.push(cur_node->function_node.first_basic_block_node_id);
             } break;
             case NodeKind::eDecoration: {
                 this->visit(cur_node->decoration_node, cur_node_id);

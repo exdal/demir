@@ -679,6 +679,7 @@ auto ModuleBuilder::lower_decl_function_statement(this ModuleBuilder &self, AST:
                 };
 
                 self.entry_point_node_id = self.make_node({ .entry_point = entry_point });
+                self.global_node_ids.push_back(self.entry_point_node_id);
             } break;
             default:;
         }

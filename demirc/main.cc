@@ -527,7 +527,7 @@ struct IRPrinter : IR::Visitor {
     }
 
     auto visit(IR::ReturnInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v.kind, "[node: {}]", std::to_underlying(v.returning_node_id));
+        print(node_id, v.kind, "[node: %{}]", std::to_underlying(v.returning_node_id));
     }
 
     auto visit(IR::KillInstruction &, IR::NodeID node_id) -> void override {
@@ -712,7 +712,7 @@ struct IRPrinter : IR::Visitor {
         print(
             node_id,
             v.kind,
-            "[kind: %{}] [function_node_id: %{}] [identifier: {}]",
+            "[kind: %{}] [function_node_id: %{}] [identifier: \"{}\"]",
             std::to_underlying(v.shader_kind),
             std::to_underlying(v.function_node_id),
             v.name_str
