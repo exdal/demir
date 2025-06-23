@@ -20,6 +20,7 @@ enum Precedence : i32 {
     Precedence_BitShift,
     Precedence_Additive,
     Precedence_Multiplicative,
+    Precedence_Unary,
 };
 
 enum class NodeKind : u32 {
@@ -30,6 +31,7 @@ enum class NodeKind : u32 {
     eConstantValueExpression,
     eAssignExpression,
     eBinaryExpression,
+    eUnaryExpression,
     eCallFunctionExpression,
 
     // Statements
@@ -109,6 +111,20 @@ struct BinaryExpression {
 
     BinaryOp op = BinaryOp::eAdd;
     NodeID lhs_expression_id = NodeID::Invalid;
+    NodeID rhs_expression_id = NodeID::Invalid;
+};
+
+enum class UnaryOp : u32 {
+    eLogicalNot = 0, // !x
+    eBitwiseNot, // ~x
+    ePlus, // +x
+    eMinus, // -x
+};
+
+struct UnaryExpression {
+    NodeKind kind = NodeKind::eUnaryExpression;
+
+    UnaryOp op = UnaryOp::eLogicalNot;
     NodeID rhs_expression_id = NodeID::Invalid;
 };
 
@@ -223,6 +239,7 @@ union Node {
     ConstantValueExpression const_value_expression;
     AssignExpression assign_expression;
     BinaryExpression binary_expression;
+    UnaryExpression unary_expression;
     CallFunctionExpression call_function_expression;
 
     // Statements

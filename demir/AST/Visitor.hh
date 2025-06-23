@@ -15,6 +15,7 @@ struct Visitor {
     virtual auto visit(ConstantValueExpression &) -> void = 0;
     virtual auto visit(AssignExpression &) -> void = 0;
     virtual auto visit(BinaryExpression &) -> void = 0;
+    virtual auto visit(UnaryExpression &) -> void = 0;
     virtual auto visit(CallFunctionExpression &) -> void = 0;
 
     virtual auto visit(MultiStatement &) -> void = 0;

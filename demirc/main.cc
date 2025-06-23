@@ -62,6 +62,19 @@ auto binary_op_to_str(AST::BinaryOp op) -> std::string_view {
     return "???";
 }
 
+auto unary_op_to_str(AST::UnaryOp op) -> std::string_view {
+    switch (op) {
+        case AST::UnaryOp::eLogicalNot:
+            return "Logical Not (!)";
+        case AST::UnaryOp::eBitwiseNot:
+            return "Bitwise Not (~)";
+        case AST::UnaryOp::ePlus:
+            return "Plus (+)";
+        case AST::UnaryOp::eMinus:
+            return "Minus (-)";
+    }
+}
+
 auto assignment_to_str(AST::AssignmentType type) -> std::string_view {
     switch (type) {
         case AST::AssignmentType::eAssign:
@@ -371,6 +384,17 @@ struct PrinterVisitor : AST::Visitor {
             visit(v.rhs_expression_id);
             pop();
         }
+        pop();
+    }
+
+    auto visit(AST::UnaryExpression &v) -> void override {
+        print_indented("Unary expression:");
+        push();
+        print_indented("Op: {}", unary_op_to_str(v.op));
+        print_indented("RHS:");
+        push();
+        visit(v.rhs_expression_id);
+        pop();
         pop();
     }
 

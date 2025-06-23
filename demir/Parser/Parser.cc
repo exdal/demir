@@ -688,12 +688,8 @@ auto Parser::parse_struct_decl_statement(this Parser &self, std::vector<Attribut
 }
 
 auto Parser::parse_expression(this Parser &self, AST::Precedence precedence) -> AST::NodeID {
-    auto lhs_expression_id = self.parse_primary_expression();
-    if (self.peek().is(TokenKind::eParenLeft)) {
-        return self.parse_call_function_expression(lhs_expression_id);
-    } else {
-        return self.parse_expression_with_precedence(precedence, lhs_expression_id);
-    }
+    auto lhs_expression_id = self.parse_prefix_expression();
+    return self.parse_expression_with_precedence(precedence, lhs_expression_id);
 }
 
 auto Parser::parse_expression_with_precedence(this Parser &self, AST::Precedence precedence, AST::NodeID lhs_expression_id) -> AST::NodeID {
@@ -709,7 +705,7 @@ auto Parser::parse_expression_with_precedence(this Parser &self, AST::Precedence
         }
 
         self.next();
-        auto rhs_expression_id = self.parse_primary_expression();
+        auto rhs_expression_id = self.parse_prefix_expression();
 
         while (!self.peek().is(TokenKind::eEof)) {
             const auto &next_token = self.peek();
@@ -749,7 +745,7 @@ auto Parser::parse_expression_with_precedence(this Parser &self, AST::Precedence
     return expression_id;
 }
 
-auto Parser::parse_primary_expression(this Parser &self) -> AST::NodeID {
+auto Parser::parse_prefix_expression(this Parser &self) -> AST::NodeID {
     const auto &token = self.peek();
 
     auto expression_id = AST::NodeID::Invalid;
@@ -762,6 +758,12 @@ auto Parser::parse_primary_expression(this Parser &self) -> AST::NodeID {
         case TokenKind::eStringLiteral:
         case TokenKind::eIntegerLiteral: {
             expression_id = self.parse_const_value_expression();
+        } break;
+        case TokenKind::eExclaim:
+        case TokenKind::eBitNot:
+        case TokenKind::eAdd:
+        case TokenKind::eSub: {
+            expression_id = self.parse_unary_expression();
         } break;
         case TokenKind::eParenLeft: {
             self.expect(self.next(), TokenKind::eParenLeft);
@@ -838,6 +840,37 @@ auto Parser::parse_const_value_expression(this Parser &self) -> AST::NodeID {
     };
 
     return self.make_node({ .const_value_expression = const_decimal_expression });
+}
+
+auto Parser::parse_unary_expression(this Parser &self) -> AST::NodeID {
+    auto unary_op = AST::UnaryOp::eLogicalNot;
+    switch (self.peek().kind) {
+        case TokenKind::eExclaim: {
+            unary_op = AST::UnaryOp::eLogicalNot;
+        } break;
+        case TokenKind::eBitNot: {
+            unary_op = AST::UnaryOp::eBitwiseNot;
+        } break;
+        case TokenKind::eAdd: {
+            unary_op = AST::UnaryOp::ePlus;
+        } break;
+        case TokenKind::eSub: {
+            unary_op = AST::UnaryOp::eMinus;
+        } break;
+        default: {
+            throw ParserUnexpectedTokenError(self.peek().location);
+        }
+    }
+
+    self.next(); // consume unary token
+    auto rhs_expression_id = self.parse_expression(AST::Precedence_Unary);
+
+    auto unary_expression = AST::UnaryExpression{
+        .op = unary_op,
+        .rhs_expression_id = rhs_expression_id,
+    };
+
+    return self.make_node({ .unary_expression = unary_expression });
 }
 
 auto Parser::parse_call_function_expression(this Parser &self, AST::NodeID lhs_expression_id) -> AST::NodeID {

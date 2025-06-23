@@ -24,6 +24,9 @@ auto Visitor::visit(NodeID node_id) -> void {
         case NodeKind::eBinaryExpression: {
             visit(node->binary_expression);
         } break;
+        case NodeKind::eUnaryExpression: {
+            visit(node->unary_expression);
+        } break;
         case NodeKind::eCallFunctionExpression: {
             visit(node->call_function_expression);
         } break;
@@ -110,6 +113,7 @@ auto StatementVisitor::visit(NodeID node_id) -> void {
         case NodeKind::eConstantValueExpression:
         case NodeKind::eAssignExpression:
         case NodeKind::eBinaryExpression:
+        case NodeKind::eUnaryExpression:
         case NodeKind::eCallFunctionExpression:
         case NodeKind::eNone:;
     }
