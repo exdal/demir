@@ -781,15 +781,19 @@ auto Parser::parse_prefix_expression(this Parser &self) -> AST::NodeID {
 auto Parser::parse_postfix_expression(this Parser &self) -> AST::NodeID {
     auto expression_id = self.parse_prefix_expression();
 
-    const auto &token = self.peek();
-    switch (token.kind) {
-        case TokenKind::eParenLeft: {
-            expression_id = self.parse_call_function_expression(expression_id);
-        } break;
-        case TokenKind::eDot: {
-            expression_id = self.parse_access_field_expression(expression_id);
-        } break;
-        default:;
+    while (!self.peek().is(TokenKind::eEof)) {
+        const auto &token = self.peek();
+        switch (token.kind) {
+            case TokenKind::eParenLeft: {
+                expression_id = self.parse_call_function_expression(expression_id);
+            } break;
+            case TokenKind::eDot: {
+                expression_id = self.parse_access_field_expression(expression_id);
+            } break;
+            default: {
+                return expression_id;
+            }
+        }
     }
 
     return expression_id;

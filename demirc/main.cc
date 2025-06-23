@@ -401,11 +401,11 @@ struct PrinterVisitor : AST::Visitor {
     auto visit(AST::AccessFieldExpression &v) -> void override {
         print_indented("Access field expression:");
         push();
-        print_indented("Field:");
+        print_indented("Identifier: {}", v.identifier);
+        print_indented("LHS:");
         push();
         visit(v.lhs_expression_id);
         pop();
-        print_indented("Identifier: {}", v.identifier);
         pop();
     }
 
@@ -439,7 +439,7 @@ struct PrinterVisitor : AST::Visitor {
         print_indented("Declare var statement:");
         push();
         print_indented("Identifier: {}", v.identifier);
-        print_indented("Type: {}", v.type_identifier);
+        print_indented("Type: {}", !v.type_identifier.empty() ? v.type_identifier : "Undefined");
         if (v.initial_expression_id != AST::NodeID::Invalid) {
             visit(v.initial_expression_id);
         }
