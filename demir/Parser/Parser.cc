@@ -705,7 +705,7 @@ auto Parser::parse_expression_with_precedence(this Parser &self, AST::Precedence
         }
 
         self.next();
-        auto rhs_expression_id = self.parse_prefix_expression();
+        auto rhs_expression_id = self.parse_postfix_expression();
 
         while (!self.peek().is(TokenKind::eEof)) {
             const auto &next_token = self.peek();
