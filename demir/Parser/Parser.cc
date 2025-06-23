@@ -688,7 +688,7 @@ auto Parser::parse_struct_decl_statement(this Parser &self, std::vector<Attribut
 }
 
 auto Parser::parse_expression(this Parser &self, AST::Precedence precedence) -> AST::NodeID {
-    auto lhs_expression_id = self.parse_prefix_expression();
+    auto lhs_expression_id = self.parse_postfix_expression();
     return self.parse_expression_with_precedence(precedence, lhs_expression_id);
 }
 
@@ -773,6 +773,20 @@ auto Parser::parse_prefix_expression(this Parser &self) -> AST::NodeID {
         default: {
             throw ParserUnexpectedTokenError(token.location);
         }
+    }
+
+    return expression_id;
+}
+
+auto Parser::parse_postfix_expression(this Parser &self) -> AST::NodeID {
+    auto expression_id = self.parse_prefix_expression();
+
+    const auto &token = self.peek();
+    switch (token.kind) {
+        case TokenKind::eParenLeft: {
+            expression_id = self.parse_call_function_expression(expression_id);
+        } break;
+        default:;
     }
 
     return expression_id;

@@ -48,6 +48,7 @@ private:
     auto parse_expression(this Parser &, AST::Precedence precedence = AST::Precedence_Comma) -> AST::NodeID;
     auto parse_expression_with_precedence(this Parser &, AST::Precedence precedence, AST::NodeID lhs_expression_id) -> AST::NodeID;
     auto parse_prefix_expression(this Parser &) -> AST::NodeID;
+    auto parse_postfix_expression(this Parser &) -> AST::NodeID;
 
     auto parse_expression_list(this Parser &, TokenKind terminator) -> std::vector<AST::NodeID>;
     auto parse_identifier_expression(this Parser &) -> AST::NodeID;
