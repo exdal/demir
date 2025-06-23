@@ -32,6 +32,7 @@ enum class NodeKind : u32 {
     eAssignExpression,
     eBinaryExpression,
     eUnaryExpression,
+    eAccessFieldExpression,
     eCallFunctionExpression,
 
     // Statements
@@ -126,6 +127,13 @@ struct UnaryExpression {
 
     UnaryOp op = UnaryOp::eLogicalNot;
     NodeID rhs_expression_id = NodeID::Invalid;
+};
+
+struct AccessFieldExpression {
+    NodeKind kind = NodeKind::eAccessFieldExpression;
+
+    NodeID lhs_expression_id = NodeID::Invalid;
+    std::string_view identifier = {};
 };
 
 struct CallFunctionExpression {
@@ -240,6 +248,7 @@ union Node {
     AssignExpression assign_expression;
     BinaryExpression binary_expression;
     UnaryExpression unary_expression;
+    AccessFieldExpression access_field_expression;
     CallFunctionExpression call_function_expression;
 
     // Statements

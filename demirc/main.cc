@@ -398,6 +398,17 @@ struct PrinterVisitor : AST::Visitor {
         pop();
     }
 
+    auto visit(AST::AccessFieldExpression &v) -> void override {
+        print_indented("Access field expression:");
+        push();
+        print_indented("Field:");
+        push();
+        visit(v.lhs_expression_id);
+        pop();
+        print_indented("Identifier: {}", v.identifier);
+        pop();
+    }
+
     auto visit(AST::CallFunctionExpression &v) -> void override {
         print_indented("Call function expression:");
         push();

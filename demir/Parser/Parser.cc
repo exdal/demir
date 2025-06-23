@@ -786,6 +786,9 @@ auto Parser::parse_postfix_expression(this Parser &self) -> AST::NodeID {
         case TokenKind::eParenLeft: {
             expression_id = self.parse_call_function_expression(expression_id);
         } break;
+        case TokenKind::eDot: {
+            expression_id = self.parse_access_field_expression(expression_id);
+        } break;
         default:;
     }
 
@@ -885,6 +888,18 @@ auto Parser::parse_unary_expression(this Parser &self) -> AST::NodeID {
     };
 
     return self.make_node({ .unary_expression = unary_expression });
+}
+
+auto Parser::parse_access_field_expression(this Parser &self, AST::NodeID lhs_expression_id) -> AST::NodeID {
+    self.expect(self.next(), TokenKind::eDot);
+    auto identifier = self.parse_identifier();
+
+    auto access_field_expression = AST::AccessFieldExpression{
+        .lhs_expression_id = lhs_expression_id,
+        .identifier = identifier,
+    };
+
+    return self.make_node({ .access_field_expression = access_field_expression });
 }
 
 auto Parser::parse_call_function_expression(this Parser &self, AST::NodeID lhs_expression_id) -> AST::NodeID {
