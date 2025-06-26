@@ -20,7 +20,7 @@ struct BasicBlockBuilder {
 
     auto terminate_branch(this BasicBlockBuilder &, BasicBlockBuilder &branching_block) -> NodeID;
     auto terminate_branch(this BasicBlockBuilder &, NodeID branching_block_id) -> NodeID;
-    auto terminate_return(this BasicBlockBuilder &, ValueKind value_kind) -> NodeID;
+    auto terminate_return(this BasicBlockBuilder &, NodeID returning_node_id) -> NodeID;
 
     auto make_instr(const Node &node) -> NodeID;
 
@@ -29,13 +29,14 @@ struct BasicBlockBuilder {
     auto store_instr(this BasicBlockBuilder &, NodeID src_node_id, NodeID dst_node_id) -> void;
 
     auto lower_variable(this BasicBlockBuilder &, std::string_view identifier, ValueKind value_kind, NodeID initializer_node_id = NodeID::Invalid) -> NodeID;
-    auto lower_binary_op(this BasicBlockBuilder &, AST::BinaryOp op, NodeID lhs_node_id, NodeID rhs_node_id) -> NodeID;
+    auto lower_binary_op(this BasicBlockBuilder &, AST::BinaryOp op, NodeID type_node_id, NodeID lhs_node_id, NodeID rhs_node_id) -> NodeID;
     auto lower_expression(this BasicBlockBuilder &, AST::NodeID expression_node_id) -> NodeID;
 
     auto lower_identifier_expression(this BasicBlockBuilder &, AST::IdentifierExpression &expression) -> NodeID;
     auto lower_constant_expression(this BasicBlockBuilder &, AST::ConstantValueExpression &expression) -> NodeID;
     auto lower_assign_expression(this BasicBlockBuilder &, AST::AssignExpression &expression) -> NodeID;
     auto lower_binary_op_expression(this BasicBlockBuilder &, AST::BinaryExpression &expression) -> NodeID;
+    auto lower_unary_expression(this BasicBlockBuilder &, AST::UnaryExpression &expression) -> NodeID;
     auto lower_function_call_expression(this BasicBlockBuilder &, AST::CallFunctionExpression &expression) -> NodeID;
 };
 

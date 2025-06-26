@@ -78,15 +78,15 @@ auto unary_op_to_str(AST::UnaryOp op) -> std::string_view {
 auto assignment_to_str(AST::AssignmentType type) -> std::string_view {
     switch (type) {
         case AST::AssignmentType::eAssign:
-            return "SIMPLE";
+            return "Simple (=)";
         case AST::AssignmentType::eCompoundAdd:
-            return "COMPOUND ADD";
+            return "Compound add (+=)";
         case AST::AssignmentType::eCompoundSub:
-            return "COMPOUND SUB";
+            return "Compound sub (-=)";
         case AST::AssignmentType::eCompoundMul:
-            return "COMPOUND MUL";
+            return "Compound mul (*=)";
         case AST::AssignmentType::eCompoundDiv:
-            return "COMPOUND DIV";
+            return "Compound div (/=)";
     }
 
     return "???";
@@ -151,6 +151,10 @@ auto instruction_kind_to_str(IR::NodeKind kind) -> std::string_view {
             return "OpMul";
         case IR::NodeKind::eDiv:
             return "OpDiv";
+        case IR::NodeKind::eNegate:
+            return "OpNegate";
+        case IR::NodeKind::eBitNot:
+            return "OpBitNot";
         case IR::NodeKind::eEqual:
             return "OpEqual";
         case IR::NodeKind::eNotEqual:
@@ -185,6 +189,8 @@ auto instruction_kind_to_str(IR::NodeKind kind) -> std::string_view {
             return "OpMemberDecoration";
         case IR::NodeKind::eEntryPoint:
             return "OpEntryPoint";
+        case IR::NodeKind::eSelect:
+            return "OpSelect";
     }
 }
 
@@ -550,41 +556,52 @@ struct PrinterVisitor : AST::Visitor {
     }
 };
 
+template<typename T>
+concept IsIRNode = requires {
+    T::kind;
+    std::is_same_v<decltype(T::kind), IR::NodeKind>;
+};
+
+template<typename T>
+concept IsIRNodeWithType = requires {
+    IsIRNode<T>;
+    T::type_node_id;
+};
+
 struct IRPrinter : IR::Visitor {
     using IR::Visitor::visit;
 
     IRPrinter(IR::Module *module_) : IR::Visitor(module_) {}
 
-    template<typename... Args>
-    auto print(IR::NodeID node_id, IR::NodeKind node_kind, fmt::format_string<Args...> str = "", Args &&...args) {
+    template<typename T, typename... Args>
+    auto print(IR::NodeID node_id, T &v, fmt::format_string<Args...> str = "", Args &&...args) {
         auto f = fmt::format(str, std::forward<Args>(args)...);
-        fmt::println(" %{:<2} = {} {}", std::to_underlying(node_id), instruction_kind_to_str(node_kind), f);
+
+        if constexpr (IsIRNodeWithType<T>) {
+            fmt::println(" %{:<2} = {} [type: %{}] {}", std::to_underlying(node_id), instruction_kind_to_str(v.kind), std::to_underlying(v.type_node_id), f);
+        } else {
+            fmt::println(" %{:<2} = {} {}", std::to_underlying(node_id), instruction_kind_to_str(v.kind), f);
+        }
     }
 
     auto visit(IR::ReturnInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v.kind, "[node: %{}]", std::to_underlying(v.returning_node_id));
+        print(node_id, v, "[node: %{}]", std::to_underlying(v.returning_node_id));
     }
 
-    auto visit(IR::KillInstruction &, IR::NodeID node_id) -> void override {
-        print(node_id, IR::NodeKind::eKill);
+    auto visit(IR::KillInstruction &v, IR::NodeID node_id) -> void override {
+        print(node_id, v);
     }
 
     auto visit(IR::SelectionMergeInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v.kind, "[dst_block: %{}]", std::to_underlying(v.dst_block_node_id));
+        print(node_id, v, "[dst_block: %{}]", std::to_underlying(v.dst_block_node_id));
     }
 
     auto visit(IR::LoopMergeInstruction &v, IR::NodeID node_id) -> void override {
-        print(
-            node_id,
-            v.kind,
-            "[dst_block: %{}] [continuing_block: %{}]",
-            std::to_underlying(v.dst_block_node_id),
-            std::to_underlying(v.continuing_block_node_id)
-        );
+        print(node_id, v, "[dst_block: %{}] [continuing_block: %{}]", std::to_underlying(v.dst_block_node_id), std::to_underlying(v.continuing_block_node_id));
     }
 
     auto visit(IR::BranchInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v.kind, "[dst_block: %{}]", std::to_underlying(v.next_block_node_id));
+        print(node_id, v, "[dst_block: %{}]", std::to_underlying(v.next_block_node_id));
     }
 
     auto visit(IR::ConditionalBranchInstruction &v, IR::NodeID node_id) -> void override {
@@ -594,7 +611,7 @@ struct IRPrinter : IR::Visitor {
         }
 
         str += fmt::format("[false_branch: %{}] ", std::to_underlying(v.false_block_node_id));
-        print(node_id, v.kind, "{}", str);
+        print(node_id, v, "{}", str);
     }
 
     auto visit(IR::MultiwayBranchInstruction &v, IR::NodeID node_id) -> void override {
@@ -604,55 +621,63 @@ struct IRPrinter : IR::Visitor {
             str += fmt::format(" [branch_value: {}] [dst_block: %{}]", branch.literal, std::to_underlying(branch.target_block_id));
         }
 
-        print(node_id, v.kind, "{}", str);
+        print(node_id, v, "{}", str);
     }
 
     auto visit(IR::LoadInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v.kind, "[type: %{}] [variable: %{}]", std::to_underlying(v.type_node_id), std::to_underlying(v.variable_node_id));
+        print(node_id, v, "[variable: %{}]", std::to_underlying(v.variable_node_id));
     }
 
     auto visit(IR::StoreInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v.kind, "[dst: %{}] [src: %{}]", std::to_underlying(v.dst_node_id), std::to_underlying(v.src_node_id));
+        print(node_id, v, "[dst: %{}] [src: %{}]", std::to_underlying(v.dst_node_id), std::to_underlying(v.src_node_id));
     }
 
     auto visit(IR::AddInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v.kind, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.lhs_node_id), std::to_underlying(v.rhs_node_id));
+        print(node_id, v, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.operand_1), std::to_underlying(v.operand_2));
     }
 
     auto visit(IR::SubInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v.kind, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.lhs_node_id), std::to_underlying(v.rhs_node_id));
+        print(node_id, v, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.operand_1), std::to_underlying(v.operand_2));
     }
 
     auto visit(IR::MulInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v.kind, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.lhs_node_id), std::to_underlying(v.rhs_node_id));
+        print(node_id, v, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.operand_1), std::to_underlying(v.operand_2));
     }
 
     auto visit(IR::DivInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v.kind, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.lhs_node_id), std::to_underlying(v.rhs_node_id));
+        print(node_id, v, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.operand_1), std::to_underlying(v.operand_2));
+    }
+
+    auto visit(IR::NegateInstruction &v, IR::NodeID node_id) -> void override {
+        print(node_id, v, "[dst: %{}]", std::to_underlying(v.dst_node_id));
+    }
+
+    auto visit(IR::BitNotInstruction &v, IR::NodeID node_id) -> void override {
+        print(node_id, v, "[dst: %{}]", std::to_underlying(v.dst_node_id));
     }
 
     auto visit(IR::EqualInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v.kind, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.lhs_node_id), std::to_underlying(v.rhs_node_id));
+        print(node_id, v, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.operand_1), std::to_underlying(v.operand_2));
     }
 
     auto visit(IR::NotEqualInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v.kind, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.lhs_node_id), std::to_underlying(v.rhs_node_id));
+        print(node_id, v, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.operand_1), std::to_underlying(v.operand_2));
     }
 
     auto visit(IR::GreaterThanInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v.kind, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.lhs_node_id), std::to_underlying(v.rhs_node_id));
+        print(node_id, v, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.operand_1), std::to_underlying(v.operand_2));
     }
 
     auto visit(IR::GreaterThanEqualInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v.kind, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.lhs_node_id), std::to_underlying(v.rhs_node_id));
+        print(node_id, v, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.operand_1), std::to_underlying(v.operand_2));
     }
 
     auto visit(IR::LessThanInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v.kind, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.lhs_node_id), std::to_underlying(v.rhs_node_id));
+        print(node_id, v, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.operand_1), std::to_underlying(v.operand_2));
     }
 
     auto visit(IR::LessThanEqualInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v.kind, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.lhs_node_id), std::to_underlying(v.rhs_node_id));
+        print(node_id, v, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.operand_1), std::to_underlying(v.operand_2));
     }
 
     auto visit(IR::FunctionCallInstruction &v, IR::NodeID node_id) -> void override {
@@ -661,11 +686,11 @@ struct IRPrinter : IR::Visitor {
             str += fmt::format(" [param: %{}]", std::to_underlying(param_node_id));
         }
 
-        print(node_id, v.kind, "{}", str);
+        print(node_id, v, "{}", str);
     }
 
     auto visit(IR::Type &v, IR::NodeID node_id) -> void override {
-        print(node_id, v.kind, "[kind: {}] [width: {}] [signed: {}]", instruction_type_kind_to_str(v.type_kind), v.width, v.is_signed);
+        print(node_id, v, "[kind: {}] [width: {}] [signed: {}]", instruction_type_kind_to_str(v.type_kind), v.width, v.is_signed);
     }
 
     auto visit(IR::Constant &v, IR::NodeID node_id) -> void override {
@@ -697,25 +722,25 @@ struct IRPrinter : IR::Visitor {
             } break;
         }
 
-        print(node_id, v.kind, "[type: %{}] [value: {}]", std::to_underlying(v.type_node_id), value_str);
+        print(node_id, v, "[value: {}]", value_str);
     }
 
     auto visit(IR::Variable &v, IR::NodeID node_id) -> void override {
-        print(node_id, v.kind, "[type: %{}]", std::to_underlying(v.type_node_id));
+        print(node_id, v);
     }
 
     auto visit(IR::BasicBlock &v, IR::NodeID node_id) -> void override {
-        print(node_id, v.kind);
+        print(node_id, v);
     }
 
     auto visit(IR::Function &v, IR::NodeID node_id) -> void override {
-        print(node_id, v.kind);
+        print(node_id, v);
     }
 
     auto visit(IR::Decoration &v, IR::NodeID node_id) -> void override {
         print(
             node_id,
-            v.kind,
+            v,
             "[dst_node_id: %{}] [decoration: {}] [operand: {}]",
             std::to_underlying(v.target_node_id),
             decoration_kind_to_str(v.decoration_kind),
@@ -726,7 +751,7 @@ struct IRPrinter : IR::Visitor {
     auto visit(IR::MemberDecoration &v, IR::NodeID node_id) -> void override {
         print(
             node_id,
-            v.kind,
+            v,
             "[dst_struct_id: %{}] [decoration: {}] [operand: {}]",
             std::to_underlying(v.target_struct_node_id),
             decoration_kind_to_str(v.decoration_kind),
@@ -736,17 +761,17 @@ struct IRPrinter : IR::Visitor {
 
     auto visit(IR::Struct &v, IR::NodeID node_id) -> void override {
         auto str = std::string{};
-        for (auto type_node_ids : v.field_type_node_ids) {
-            str += fmt::format(" [type: %{}]", std::to_underlying(type_node_ids));
+        for (const auto &[type_node_ids, field_index] : std::views::zip(v.field_type_node_ids, std::views::iota(0_u32))) {
+            str += fmt::format("[field{}_type: %{}] ", field_index, std::to_underlying(type_node_ids));
         }
 
-        print(node_id, v.kind, "{}", str);
+        print(node_id, v, "{}", str);
     }
 
     auto visit(IR::EntryPoint &v, IR::NodeID node_id) -> void override {
         print(
             node_id,
-            v.kind,
+            v,
             "[kind: %{}] [function_node_id: %{}] [identifier: \"{}\"]",
             std::to_underlying(v.shader_kind),
             std::to_underlying(v.function_node_id),

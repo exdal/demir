@@ -82,6 +82,12 @@ auto Visitor::visit(NodeID node_id) -> void {
             case NodeKind::eDiv: {
                 this->visit(cur_node->div_instr, cur_node_id);
             } break;
+            case NodeKind::eNegate: {
+                this->visit(cur_node->negate_instr, cur_node_id);
+            } break;
+            case NodeKind::eBitNot: {
+                this->visit(cur_node->bit_not_instruction, cur_node_id);
+            } break;
             case NodeKind::eEqual: {
                 this->visit(cur_node->equal_instr, cur_node_id);
             } break;

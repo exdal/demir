@@ -17,19 +17,30 @@ enum class NodeKind : u32 {
     eBranch, // terminating
     eConditionalBranch, // terminating
     eMultiwayBranch, // terminating
+
     // Memory instructions
     eLoad,
     eStore,
+
+    // Arithmatic instructions
     eAdd,
     eSub,
     eMul,
     eDiv,
+    eNegate,
+
+    // Bit instructions
+    eBitNot,
+
+    // Relational and logical instructions
     eEqual,
     eNotEqual,
     eGreaterThan,
     eGreaterThanEqual,
     eLessThan,
     eLessThanEqual,
+    eSelect,
+
     // Function instructions
     eFunctionCall,
 
@@ -42,15 +53,6 @@ enum class NodeKind : u32 {
     eMemberDecoration,
     eStruct,
     eEntryPoint,
-};
-
-// @grok what should i rename this to?
-template<NodeKind KIND>
-struct HandedInstruction {
-    NodeKind kind = KIND;
-
-    NodeID lhs_node_id = NodeID::Invalid;
-    NodeID rhs_node_id = NodeID::Invalid;
 };
 
 // Terminating instruction, must be at the end of the block.
@@ -127,17 +129,107 @@ struct StoreInstruction {
     NodeID src_node_id = NodeID::Invalid;
 };
 
-using AddInstruction = HandedInstruction<NodeKind::eAdd>;
-using SubInstruction = HandedInstruction<NodeKind::eSub>;
-using DivInstruction = HandedInstruction<NodeKind::eDiv>;
-using MulInstruction = HandedInstruction<NodeKind::eMul>;
+struct AddInstruction {
+    NodeKind kind = NodeKind::eAdd;
 
-using EqualInstruction = HandedInstruction<NodeKind::eEqual>;
-using NotEqualInstruction = HandedInstruction<NodeKind::eNotEqual>;
-using GreaterThanInstruction = HandedInstruction<NodeKind::eGreaterThan>;
-using GreaterThanEqualInstruction = HandedInstruction<NodeKind::eGreaterThanEqual>;
-using LessThanInstruction = HandedInstruction<NodeKind::eLessThan>;
-using LessThanEqualInstruction = HandedInstruction<NodeKind::eLessThanEqual>;
+    NodeID type_node_id = NodeID::Invalid;
+    NodeID operand_1 = NodeID::Invalid;
+    NodeID operand_2 = NodeID::Invalid;
+};
+
+struct SubInstruction {
+    NodeKind kind = NodeKind::eSub;
+
+    NodeID type_node_id = NodeID::Invalid;
+    NodeID operand_1 = NodeID::Invalid;
+    NodeID operand_2 = NodeID::Invalid;
+};
+
+struct DivInstruction {
+    NodeKind kind = NodeKind::eDiv;
+
+    NodeID type_node_id = NodeID::Invalid;
+    NodeID operand_1 = NodeID::Invalid;
+    NodeID operand_2 = NodeID::Invalid;
+};
+
+struct MulInstruction {
+    NodeKind kind = NodeKind::eMul;
+
+    NodeID type_node_id = NodeID::Invalid;
+    NodeID operand_1 = NodeID::Invalid;
+    NodeID operand_2 = NodeID::Invalid;
+};
+
+struct NegateInstruction {
+    NodeKind kind = NodeKind::eNegate;
+
+    NodeID type_node_id = NodeID::Invalid;
+    NodeID dst_node_id = NodeID::Invalid;
+};
+
+struct BitNotInstruction {
+    NodeKind kind = NodeKind::eBitNot;
+
+    NodeID type_node_id = NodeID::Invalid;
+    NodeID dst_node_id = NodeID::Invalid;
+};
+
+struct EqualInstruction {
+    NodeKind kind = NodeKind::eEqual;
+
+    NodeID type_node_id = NodeID::Invalid;
+    NodeID operand_1 = NodeID::Invalid;
+    NodeID operand_2 = NodeID::Invalid;
+};
+
+struct NotEqualInstruction {
+    NodeKind kind = NodeKind::eNotEqual;
+
+    NodeID type_node_id = NodeID::Invalid;
+    NodeID operand_1 = NodeID::Invalid;
+    NodeID operand_2 = NodeID::Invalid;
+};
+
+struct GreaterThanInstruction {
+    NodeKind kind = NodeKind::eGreaterThan;
+
+    NodeID type_node_id = NodeID::Invalid;
+    NodeID operand_1 = NodeID::Invalid;
+    NodeID operand_2 = NodeID::Invalid;
+};
+
+struct GreaterThanEqualInstruction {
+    NodeKind kind = NodeKind::eGreaterThanEqual;
+
+    NodeID type_node_id = NodeID::Invalid;
+    NodeID operand_1 = NodeID::Invalid;
+    NodeID operand_2 = NodeID::Invalid;
+};
+
+struct LessThanInstruction {
+    NodeKind kind = NodeKind::eLessThan;
+
+    NodeID type_node_id = NodeID::Invalid;
+    NodeID operand_1 = NodeID::Invalid;
+    NodeID operand_2 = NodeID::Invalid;
+};
+
+struct LessThanEqualInstruction {
+    NodeKind kind = NodeKind::eLessThanEqual;
+
+    NodeID type_node_id = NodeID::Invalid;
+    NodeID operand_1 = NodeID::Invalid;
+    NodeID operand_2 = NodeID::Invalid;
+};
+
+struct SelectInstruction {
+    NodeKind kind = NodeKind::eSelect;
+
+    NodeID condition_node_id = NodeID::Invalid;
+    NodeID lhs_node_id = NodeID::Invalid;
+    NodeID rhs_node_id = NodeID::Invalid;
+};
 
 struct FunctionCallInstruction {
     NodeKind kind = NodeKind::eFunctionCall;
@@ -194,8 +286,8 @@ struct BasicBlock {
 struct Function {
     NodeKind kind = NodeKind::eFunction;
 
+    NodeID type_node_id = NodeID::Invalid;
     Span<NodeID> parameter_type_node_ids = {};
-    NodeID return_type_node_id = NodeID::Invalid;
     NodeID first_basic_block_node_id = NodeID::Invalid;
 };
 
@@ -244,7 +336,7 @@ struct EntryPoint {
 };
 
 union Node {
-    NodeKind kind = NodeKind::eVariable;
+    NodeKind kind = NodeKind::eNoOp;
 
     ReturnInstruction return_instr;
     KillInstruction kill_instr;
@@ -258,6 +350,8 @@ union Node {
     AddInstruction add_instr;
     SubInstruction sub_instr;
     MulInstruction mul_instr;
+    NegateInstruction negate_instr;
+    BitNotInstruction bit_not_instruction;
     DivInstruction div_instr;
     EqualInstruction equal_instr;
     NotEqualInstruction not_equal_instr;
@@ -265,6 +359,7 @@ union Node {
     GreaterThanEqualInstruction greater_than_eq_instr;
     LessThanInstruction less_than_instr;
     LessThanEqualInstruction less_than_eq_instr;
+    SelectInstruction select_instr;
     FunctionCallInstruction function_call_instr;
 
     Type type_node;

@@ -18,25 +18,21 @@ struct Visitor {
     virtual auto visit(BranchInstruction &, NodeID) -> void = 0;
     virtual auto visit(ConditionalBranchInstruction &, NodeID) -> void = 0;
     virtual auto visit(MultiwayBranchInstruction &, NodeID) -> void = 0;
-
-    // Memory instructions
     virtual auto visit(LoadInstruction &, NodeID) -> void = 0;
     virtual auto visit(StoreInstruction &, NodeID) -> void = 0;
     virtual auto visit(AddInstruction &, NodeID) -> void = 0;
     virtual auto visit(SubInstruction &, NodeID) -> void = 0;
     virtual auto visit(MulInstruction &, NodeID) -> void = 0;
     virtual auto visit(DivInstruction &, NodeID) -> void = 0;
+    virtual auto visit(NegateInstruction &, NodeID) -> void = 0;
+    virtual auto visit(BitNotInstruction &, NodeID) -> void = 0;
     virtual auto visit(EqualInstruction &, NodeID) -> void = 0;
     virtual auto visit(NotEqualInstruction &, NodeID) -> void = 0;
     virtual auto visit(GreaterThanInstruction &, NodeID) -> void = 0;
     virtual auto visit(GreaterThanEqualInstruction &, NodeID) -> void = 0;
     virtual auto visit(LessThanInstruction &, NodeID) -> void = 0;
     virtual auto visit(LessThanEqualInstruction &, NodeID) -> void = 0;
-
-    // Function instructions
     virtual auto visit(FunctionCallInstruction &, NodeID) -> void = 0;
-
-    // Other node types
     virtual auto visit(Type &, NodeID) -> void = 0;
     virtual auto visit(Constant &, NodeID) -> void = 0;
     virtual auto visit(Variable &, NodeID) -> void = 0;
