@@ -328,9 +328,10 @@ auto BasicBlockBuilder::lower_assign_expression(this BasicBlockBuilder &self, AS
 auto BasicBlockBuilder::lower_binary_op_expression(this BasicBlockBuilder &self, AST::BinaryExpression &expression) -> NodeID {
     auto lhs_node_id = self.lower_expression(expression.lhs_expression_id);
     auto rhs_node_id = self.lower_expression(expression.rhs_expression_id);
+    auto lhs_type_node_id = self.module_builder->get_underlying_type_node_id(lhs_node_id);
 
     // TODO: Handle cases when its actually an assignment op, insert implicit x == true
-    return self.lower_binary_op(expression.op, NodeID::Invalid, lhs_node_id, rhs_node_id);
+    return self.lower_binary_op(expression.op, lhs_type_node_id, lhs_node_id, rhs_node_id);
 }
 
 auto BasicBlockBuilder::lower_unary_expression(this BasicBlockBuilder &self, AST::UnaryExpression &expression) -> NodeID {
@@ -481,6 +482,56 @@ auto ModuleBuilder::push_scope(this ModuleBuilder &self, NodeID begin_marker_nod
 
 auto ModuleBuilder::pop_scope(this ModuleBuilder &self) -> void {
     self.symbols.pop_scope();
+}
+
+auto ModuleBuilder::get_underlying_type_node_id(this ModuleBuilder &self, NodeID node_id) -> NodeID {
+    auto *cur_node = self.get_node(node_id);
+    switch (cur_node->kind) {
+        // Nodes that have type node ids
+        case NodeKind::eLoad:
+        case NodeKind::eAdd:
+        case NodeKind::eSub:
+        case NodeKind::eMul:
+        case NodeKind::eDiv:
+        case NodeKind::eNegate:
+        case NodeKind::eBitNot:
+        case NodeKind::eEqual:
+        case NodeKind::eNotEqual:
+        case NodeKind::eGreaterThan:
+        case NodeKind::eGreaterThanEqual:
+        case NodeKind::eLessThan:
+        case NodeKind::eLessThanEqual:
+        case NodeKind::eType:
+        case NodeKind::eConstant:
+        case NodeKind::eVariable:
+        case NodeKind::eFunction: {
+            return cur_node->load_instr.type_node_id;
+        }
+
+        // Nodes that point to a node with type node id
+        case NodeKind::eFunctionCall: {
+            return self.get_underlying_type_node_id(cur_node->function_call_instr.callee_node_id);
+        }
+
+        // Nodes with no type is attached
+        case NodeKind::eNoOp:
+        case NodeKind::eReturn:
+        case NodeKind::eKill:
+        case NodeKind::eSelectionMerge:
+        case NodeKind::eLoopMerge:
+        case NodeKind::eBranch:
+        case NodeKind::eConditionalBranch:
+        case NodeKind::eMultiwayBranch:
+        case NodeKind::eStore:
+        case NodeKind::eSelect:
+        case NodeKind::eBasicBlock:
+        case NodeKind::eDecoration:
+        case NodeKind::eMemberDecoration:
+        case NodeKind::eStruct:
+        case NodeKind::eEntryPoint:;
+    }
+
+    return NodeID::Invalid;
 }
 
 auto ModuleBuilder::lookup_identifier(this ModuleBuilder &self, std::string_view identifier_str) -> NodeID {

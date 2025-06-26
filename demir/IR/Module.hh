@@ -72,6 +72,7 @@ struct ModuleBuilder : AST::StatementVisitor {
     auto push_scope(this ModuleBuilder &, NodeID begin_marker_node_id = NodeID::Invalid, NodeID end_marker_node_id = NodeID::Invalid) -> void;
     auto pop_scope(this ModuleBuilder &) -> void;
 
+    auto get_underlying_type_node_id(this ModuleBuilder &, NodeID node_id) -> NodeID;
     auto lookup_identifier(this ModuleBuilder &, std::string_view identifier_str) -> NodeID;
     auto reserve_function(this ModuleBuilder &, std::string_view identifier_str) -> NodeID;
     auto decorate_node(this ModuleBuilder &, NodeID target_node_id, DecorationKind kind, DecorationOperand operand) -> NodeID;
