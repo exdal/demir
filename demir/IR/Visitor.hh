@@ -32,6 +32,8 @@ struct Visitor {
     virtual auto visit(GreaterThanEqualInstruction &, NodeID) -> void = 0;
     virtual auto visit(LessThanInstruction &, NodeID) -> void = 0;
     virtual auto visit(LessThanEqualInstruction &, NodeID) -> void = 0;
+    virtual auto visit(LogicalNotInstruction &, NodeID) -> void = 0;
+    virtual auto visit(SelectInstruction &, NodeID) -> void = 0;
     virtual auto visit(FunctionCallInstruction &, NodeID) -> void = 0;
     virtual auto visit(Type &, NodeID) -> void = 0;
     virtual auto visit(Constant &, NodeID) -> void = 0;

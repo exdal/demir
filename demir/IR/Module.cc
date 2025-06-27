@@ -142,80 +142,80 @@ auto BasicBlockBuilder::lower_binary_op(this BasicBlockBuilder &self, AST::Binar
         case AST::BinaryOp::eAdd: {
             auto instr = AddInstruction{
                 .type_node_id = type_node_id,
-                .operand_1 = lhs_node_id,
-                .operand_2 = rhs_node_id,
+                .operand_1_node_id = lhs_node_id,
+                .operand_2_node_id = rhs_node_id,
             };
             return self.make_instr({ .add_instr = instr });
         }
         case AST::BinaryOp::eSub: {
             auto instr = SubInstruction{
                 .type_node_id = type_node_id,
-                .operand_1 = lhs_node_id,
-                .operand_2 = rhs_node_id,
+                .operand_1_node_id = lhs_node_id,
+                .operand_2_node_id = rhs_node_id,
             };
             return self.make_instr({ .sub_instr = instr });
         }
         case AST::BinaryOp::eMul: {
             auto instr = MulInstruction{
                 .type_node_id = type_node_id,
-                .operand_1 = lhs_node_id,
-                .operand_2 = rhs_node_id,
+                .operand_1_node_id = lhs_node_id,
+                .operand_2_node_id = rhs_node_id,
             };
             return self.make_instr({ .mul_instr = instr });
         }
         case AST::BinaryOp::eDiv: {
             auto instr = DivInstruction{
                 .type_node_id = type_node_id,
-                .operand_1 = lhs_node_id,
-                .operand_2 = rhs_node_id,
+                .operand_1_node_id = lhs_node_id,
+                .operand_2_node_id = rhs_node_id,
             };
             return self.make_instr({ .div_instr = instr });
         }
         case AST::BinaryOp::eCompGreater: {
             auto instr = GreaterThanInstruction{
                 .type_node_id = type_node_id,
-                .operand_1 = lhs_node_id,
-                .operand_2 = rhs_node_id,
+                .operand_1_node_id = lhs_node_id,
+                .operand_2_node_id = rhs_node_id,
             };
             return self.make_instr({ .greater_than_instr = instr });
         }
         case AST::BinaryOp::eCompLess: {
             auto instr = LessThanInstruction{
                 .type_node_id = type_node_id,
-                .operand_1 = lhs_node_id,
-                .operand_2 = rhs_node_id,
+                .operand_1_node_id = lhs_node_id,
+                .operand_2_node_id = rhs_node_id,
             };
             return self.make_instr({ .less_than_instr = instr });
         }
         case AST::BinaryOp::eCompEq: {
             auto instr = EqualInstruction{
                 .type_node_id = type_node_id,
-                .operand_1 = lhs_node_id,
-                .operand_2 = rhs_node_id,
+                .operand_1_node_id = lhs_node_id,
+                .operand_2_node_id = rhs_node_id,
             };
             return self.make_instr({ .equal_instr = instr });
         }
         case AST::BinaryOp::eCompNotEq: {
             auto instr = NotEqualInstruction{
                 .type_node_id = type_node_id,
-                .operand_1 = lhs_node_id,
-                .operand_2 = rhs_node_id,
+                .operand_1_node_id = lhs_node_id,
+                .operand_2_node_id = rhs_node_id,
             };
             return self.make_instr({ .not_equal_instr = instr });
         }
         case AST::BinaryOp::eCompGreaterEq: {
             auto instr = GreaterThanEqualInstruction{
                 .type_node_id = type_node_id,
-                .operand_1 = lhs_node_id,
-                .operand_2 = rhs_node_id,
+                .operand_1_node_id = lhs_node_id,
+                .operand_2_node_id = rhs_node_id,
             };
             return self.make_instr({ .greater_than_eq_instr = instr });
         }
         case AST::BinaryOp::eCompLessEq: {
             auto instr = LessThanEqualInstruction{
                 .type_node_id = type_node_id,
-                .operand_1 = lhs_node_id,
-                .operand_2 = rhs_node_id,
+                .operand_1_node_id = lhs_node_id,
+                .operand_2_node_id = rhs_node_id,
             };
             return self.make_instr({ .less_than_eq_instr = instr });
         }
@@ -339,7 +339,30 @@ auto BasicBlockBuilder::lower_unary_expression(this BasicBlockBuilder &self, AST
 
     switch (expression.op) {
         case AST::UnaryOp::eLogicalNot: {
-            // TODO: OpSelect
+            auto bool_type_node_id = self.module_builder->lower_type(ValueKind::eBool);
+            auto rhs_type_node_id = self.module_builder->get_underlying_type_node_id(rhs_node_id);
+            auto true_node_id = self.module_builder->lower_constant(Constant{ .type_node_id = rhs_type_node_id, .i32_value = 1 });
+            auto false_node_id = self.module_builder->lower_constant(Constant{ .type_node_id = rhs_type_node_id, .i32_value = 0 });
+            auto not_equal_instr = NotEqualInstruction{
+                .type_node_id = bool_type_node_id,
+                .operand_1_node_id = rhs_node_id,
+                .operand_2_node_id = false_node_id,
+            };
+            auto not_equal_instr_id = self.make_instr({ .not_equal_instr = not_equal_instr });
+
+            auto logical_not_instr = LogicalNotInstruction{
+                .type_node_id = bool_type_node_id,
+                .dst_node_id = not_equal_instr_id,
+            };
+            auto logical_not_instr_id = self.make_instr({ .logical_not_instr = logical_not_instr });
+
+            auto select_instr = SelectInstruction{
+                .type_node_id = rhs_node_id,
+                .condition_node_id = logical_not_instr_id,
+                .operand_1_node_id = true_node_id,
+                .operand_2_node_id = false_node_id,
+            };
+            return self.make_instr({ .select_instr = select_instr });
         } break;
         case AST::UnaryOp::eBitwiseNot: {
             auto instr = BitNotInstruction{
@@ -501,6 +524,8 @@ auto ModuleBuilder::get_underlying_type_node_id(this ModuleBuilder &self, NodeID
         case NodeKind::eGreaterThanEqual:
         case NodeKind::eLessThan:
         case NodeKind::eLessThanEqual:
+        case NodeKind::eLogicalNot:
+        case NodeKind::eSelect:
         case NodeKind::eType:
         case NodeKind::eConstant:
         case NodeKind::eVariable:
@@ -523,7 +548,6 @@ auto ModuleBuilder::get_underlying_type_node_id(this ModuleBuilder &self, NodeID
         case NodeKind::eConditionalBranch:
         case NodeKind::eMultiwayBranch:
         case NodeKind::eStore:
-        case NodeKind::eSelect:
         case NodeKind::eBasicBlock:
         case NodeKind::eDecoration:
         case NodeKind::eMemberDecoration:

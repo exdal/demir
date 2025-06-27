@@ -39,6 +39,7 @@ enum class NodeKind : u32 {
     eGreaterThanEqual,
     eLessThan,
     eLessThanEqual,
+    eLogicalNot,
     eSelect,
 
     // Function instructions
@@ -133,32 +134,32 @@ struct AddInstruction {
     NodeKind kind = NodeKind::eAdd;
 
     NodeID type_node_id = NodeID::Invalid;
-    NodeID operand_1 = NodeID::Invalid;
-    NodeID operand_2 = NodeID::Invalid;
+    NodeID operand_1_node_id = NodeID::Invalid;
+    NodeID operand_2_node_id = NodeID::Invalid;
 };
 
 struct SubInstruction {
     NodeKind kind = NodeKind::eSub;
 
     NodeID type_node_id = NodeID::Invalid;
-    NodeID operand_1 = NodeID::Invalid;
-    NodeID operand_2 = NodeID::Invalid;
+    NodeID operand_1_node_id = NodeID::Invalid;
+    NodeID operand_2_node_id = NodeID::Invalid;
 };
 
 struct DivInstruction {
     NodeKind kind = NodeKind::eDiv;
 
     NodeID type_node_id = NodeID::Invalid;
-    NodeID operand_1 = NodeID::Invalid;
-    NodeID operand_2 = NodeID::Invalid;
+    NodeID operand_1_node_id = NodeID::Invalid;
+    NodeID operand_2_node_id = NodeID::Invalid;
 };
 
 struct MulInstruction {
     NodeKind kind = NodeKind::eMul;
 
     NodeID type_node_id = NodeID::Invalid;
-    NodeID operand_1 = NodeID::Invalid;
-    NodeID operand_2 = NodeID::Invalid;
+    NodeID operand_1_node_id = NodeID::Invalid;
+    NodeID operand_2_node_id = NodeID::Invalid;
 };
 
 struct NegateInstruction {
@@ -179,56 +180,64 @@ struct EqualInstruction {
     NodeKind kind = NodeKind::eEqual;
 
     NodeID type_node_id = NodeID::Invalid;
-    NodeID operand_1 = NodeID::Invalid;
-    NodeID operand_2 = NodeID::Invalid;
+    NodeID operand_1_node_id = NodeID::Invalid;
+    NodeID operand_2_node_id = NodeID::Invalid;
 };
 
 struct NotEqualInstruction {
     NodeKind kind = NodeKind::eNotEqual;
 
     NodeID type_node_id = NodeID::Invalid;
-    NodeID operand_1 = NodeID::Invalid;
-    NodeID operand_2 = NodeID::Invalid;
+    NodeID operand_1_node_id = NodeID::Invalid;
+    NodeID operand_2_node_id = NodeID::Invalid;
 };
 
 struct GreaterThanInstruction {
     NodeKind kind = NodeKind::eGreaterThan;
 
     NodeID type_node_id = NodeID::Invalid;
-    NodeID operand_1 = NodeID::Invalid;
-    NodeID operand_2 = NodeID::Invalid;
+    NodeID operand_1_node_id = NodeID::Invalid;
+    NodeID operand_2_node_id = NodeID::Invalid;
 };
 
 struct GreaterThanEqualInstruction {
     NodeKind kind = NodeKind::eGreaterThanEqual;
 
     NodeID type_node_id = NodeID::Invalid;
-    NodeID operand_1 = NodeID::Invalid;
-    NodeID operand_2 = NodeID::Invalid;
+    NodeID operand_1_node_id = NodeID::Invalid;
+    NodeID operand_2_node_id = NodeID::Invalid;
 };
 
 struct LessThanInstruction {
     NodeKind kind = NodeKind::eLessThan;
 
     NodeID type_node_id = NodeID::Invalid;
-    NodeID operand_1 = NodeID::Invalid;
-    NodeID operand_2 = NodeID::Invalid;
+    NodeID operand_1_node_id = NodeID::Invalid;
+    NodeID operand_2_node_id = NodeID::Invalid;
 };
 
 struct LessThanEqualInstruction {
     NodeKind kind = NodeKind::eLessThanEqual;
 
     NodeID type_node_id = NodeID::Invalid;
-    NodeID operand_1 = NodeID::Invalid;
-    NodeID operand_2 = NodeID::Invalid;
+    NodeID operand_1_node_id = NodeID::Invalid;
+    NodeID operand_2_node_id = NodeID::Invalid;
+};
+
+struct LogicalNotInstruction {
+    NodeKind kind = NodeKind::eLogicalNot;
+
+    NodeID type_node_id = NodeID::Invalid;
+    NodeID dst_node_id = NodeID::Invalid;
 };
 
 struct SelectInstruction {
     NodeKind kind = NodeKind::eSelect;
 
+    NodeID type_node_id = NodeID::Invalid;
     NodeID condition_node_id = NodeID::Invalid;
-    NodeID lhs_node_id = NodeID::Invalid;
-    NodeID rhs_node_id = NodeID::Invalid;
+    NodeID operand_1_node_id = NodeID::Invalid;
+    NodeID operand_2_node_id = NodeID::Invalid;
 };
 
 struct FunctionCallInstruction {
@@ -359,6 +368,7 @@ union Node {
     GreaterThanEqualInstruction greater_than_eq_instr;
     LessThanInstruction less_than_instr;
     LessThanEqualInstruction less_than_eq_instr;
+    LogicalNotInstruction logical_not_instr;
     SelectInstruction select_instr;
     FunctionCallInstruction function_call_instr;
 

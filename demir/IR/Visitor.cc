@@ -106,6 +106,12 @@ auto Visitor::visit(NodeID node_id) -> void {
             case NodeKind::eLessThanEqual: {
                 this->visit(cur_node->less_than_eq_instr, cur_node_id);
             } break;
+            case NodeKind::eLogicalNot: {
+                this->visit(cur_node->logical_not_instr, cur_node_id);
+            } break;
+            case NodeKind::eSelect: {
+                this->visit(cur_node->select_instr, cur_node_id);
+            } break;
             case NodeKind::eFunctionCall: {
                 this->visit(cur_node->function_call_instr, cur_node_id);
             } break;

@@ -13,6 +13,16 @@
 
 #include <fmt/core.h>
 
+namespace demir {
+using fmt::enums::format_as;
+namespace AST {
+    using fmt::enums::format_as;
+}
+namespace IR {
+    using fmt::enums::format_as;
+}
+} // namespace demir
+
 using namespace demir;
 
 auto binary_op_to_str(AST::BinaryOp op) -> std::string_view {
@@ -191,6 +201,8 @@ auto instruction_kind_to_str(IR::NodeKind kind) -> std::string_view {
             return "OpEntryPoint";
         case IR::NodeKind::eSelect:
             return "OpSelect";
+        case IR::NodeKind::eLogicalNot:
+            return "OpLogicalNot";
     }
 }
 
@@ -357,14 +369,14 @@ struct PrinterVisitor : AST::Visitor {
         push();
         print_indented("Type: {}", assignment_to_str(v.assign_type));
         if (v.lhs_expression_id != AST::NodeID::Invalid) {
-            print_indented("LHS:");
+            print_indented("operand_1:");
             push();
             visit(v.lhs_expression_id);
             pop();
         }
 
         if (v.rhs_expression_id != AST::NodeID::Invalid) {
-            print_indented("RHS:");
+            print_indented("operand_2:");
             push();
             visit(v.rhs_expression_id);
             pop();
@@ -378,14 +390,14 @@ struct PrinterVisitor : AST::Visitor {
         push();
         print_indented("Op: {}", binary_op_to_str(v.op));
         if (v.lhs_expression_id != AST::NodeID::Invalid) {
-            print_indented("LHS:");
+            print_indented("operand_1:");
             push();
             visit(v.lhs_expression_id);
             pop();
         }
 
         if (v.rhs_expression_id != AST::NodeID::Invalid) {
-            print_indented("RHS:");
+            print_indented("operand_2:");
             push();
             visit(v.rhs_expression_id);
             pop();
@@ -397,7 +409,7 @@ struct PrinterVisitor : AST::Visitor {
         print_indented("Unary expression:");
         push();
         print_indented("Op: {}", unary_op_to_str(v.op));
-        print_indented("RHS:");
+        print_indented("operand_2:");
         push();
         visit(v.rhs_expression_id);
         pop();
@@ -408,7 +420,7 @@ struct PrinterVisitor : AST::Visitor {
         print_indented("Access field expression:");
         push();
         print_indented("Identifier: {}", v.identifier);
-        print_indented("LHS:");
+        print_indented("operand_1:");
         push();
         visit(v.lhs_expression_id);
         pop();
@@ -578,14 +590,14 @@ struct IRPrinter : IR::Visitor {
         auto f = fmt::format(str, std::forward<Args>(args)...);
 
         if constexpr (IsIRNodeWithType<T>) {
-            fmt::println(" %{:<2} = {} [type: %{}] {}", std::to_underlying(node_id), instruction_kind_to_str(v.kind), std::to_underlying(v.type_node_id), f);
+            fmt::println(" %{:<2} = {} [type: %{}] {}", node_id, instruction_kind_to_str(v.kind), v.type_node_id, f);
         } else {
-            fmt::println(" %{:<2} = {} {}", std::to_underlying(node_id), instruction_kind_to_str(v.kind), f);
+            fmt::println(" %{:<2} = {} {}", node_id, instruction_kind_to_str(v.kind), f);
         }
     }
 
     auto visit(IR::ReturnInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v, "[node: %{}]", std::to_underlying(v.returning_node_id));
+        print(node_id, v, "[node: %{}]", v.returning_node_id);
     }
 
     auto visit(IR::KillInstruction &v, IR::NodeID node_id) -> void override {
@@ -593,97 +605,105 @@ struct IRPrinter : IR::Visitor {
     }
 
     auto visit(IR::SelectionMergeInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v, "[dst_block: %{}]", std::to_underlying(v.dst_block_node_id));
+        print(node_id, v, "[dst_block: %{}]", v.dst_block_node_id);
     }
 
     auto visit(IR::LoopMergeInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v, "[dst_block: %{}] [continuing_block: %{}]", std::to_underlying(v.dst_block_node_id), std::to_underlying(v.continuing_block_node_id));
+        print(node_id, v, "[dst_block: %{}] [continuing_block: %{}]", v.dst_block_node_id, v.continuing_block_node_id);
     }
 
     auto visit(IR::BranchInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v, "[dst_block: %{}]", std::to_underlying(v.next_block_node_id));
+        print(node_id, v, "[dst_block: %{}]", v.next_block_node_id);
     }
 
     auto visit(IR::ConditionalBranchInstruction &v, IR::NodeID node_id) -> void override {
         auto str = std::string{};
         for (const auto &cond : v.conditions) {
-            str += fmt::format("[condition: %{}] [true_branch: %{}] ", std::to_underlying(cond.condition_node_id), std::to_underlying(cond.true_block_node_id));
+            str += fmt::format("[condition: %{}] [true_branch: %{}] ", cond.condition_node_id, cond.true_block_node_id);
         }
 
-        str += fmt::format("[false_branch: %{}] ", std::to_underlying(v.false_block_node_id));
+        str += fmt::format("[false_branch: %{}] ", v.false_block_node_id);
         print(node_id, v, "{}", str);
     }
 
     auto visit(IR::MultiwayBranchInstruction &v, IR::NodeID node_id) -> void override {
-        auto str = fmt::format("[default_block: %{}]", std::to_underlying(v.default_block_node_id));
+        auto str = fmt::format("[default_block: %{}]", v.default_block_node_id);
 
         for (const auto &branch : v.branches) {
-            str += fmt::format(" [branch_value: {}] [dst_block: %{}]", branch.literal, std::to_underlying(branch.target_block_id));
+            str += fmt::format(" [branch_value: {}] [dst_block: %{}]", branch.literal, branch.target_block_id);
         }
 
         print(node_id, v, "{}", str);
     }
 
     auto visit(IR::LoadInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v, "[variable: %{}]", std::to_underlying(v.variable_node_id));
+        print(node_id, v, "[variable: %{}]", v.variable_node_id);
     }
 
     auto visit(IR::StoreInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v, "[dst: %{}] [src: %{}]", std::to_underlying(v.dst_node_id), std::to_underlying(v.src_node_id));
+        print(node_id, v, "[dst: %{}] [src: %{}]", v.dst_node_id, v.src_node_id);
     }
 
     auto visit(IR::AddInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.operand_1), std::to_underlying(v.operand_2));
+        print(node_id, v, "[operand_1: %{}] [operand_2: %{}]", v.operand_1_node_id, v.operand_2_node_id);
     }
 
     auto visit(IR::SubInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.operand_1), std::to_underlying(v.operand_2));
+        print(node_id, v, "[operand_1: %{}] [operand_2: %{}]", v.operand_1_node_id, v.operand_2_node_id);
     }
 
     auto visit(IR::MulInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.operand_1), std::to_underlying(v.operand_2));
+        print(node_id, v, "[operand_1: %{}] [operand_2: %{}]", v.operand_1_node_id, v.operand_2_node_id);
     }
 
     auto visit(IR::DivInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.operand_1), std::to_underlying(v.operand_2));
+        print(node_id, v, "[operand_1: %{}] [operand_2: %{}]", v.operand_1_node_id, v.operand_2_node_id);
     }
 
     auto visit(IR::NegateInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v, "[dst: %{}]", std::to_underlying(v.dst_node_id));
+        print(node_id, v, "[dst: %{}]", v.dst_node_id);
     }
 
     auto visit(IR::BitNotInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v, "[dst: %{}]", std::to_underlying(v.dst_node_id));
+        print(node_id, v, "[dst: %{}]", v.dst_node_id);
     }
 
     auto visit(IR::EqualInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.operand_1), std::to_underlying(v.operand_2));
+        print(node_id, v, "[operand_1: %{}] [operand_2: %{}]", v.operand_1_node_id, v.operand_2_node_id);
     }
 
     auto visit(IR::NotEqualInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.operand_1), std::to_underlying(v.operand_2));
+        print(node_id, v, "[operand_1: %{}] [operand_2: %{}]", v.operand_1_node_id, v.operand_2_node_id);
     }
 
     auto visit(IR::GreaterThanInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.operand_1), std::to_underlying(v.operand_2));
+        print(node_id, v, "[operand_1: %{}] [operand_2: %{}]", v.operand_1_node_id, v.operand_2_node_id);
     }
 
     auto visit(IR::GreaterThanEqualInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.operand_1), std::to_underlying(v.operand_2));
+        print(node_id, v, "[operand_1: %{}] [operand_2: %{}]", v.operand_1_node_id, v.operand_2_node_id);
     }
 
     auto visit(IR::LessThanInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.operand_1), std::to_underlying(v.operand_2));
+        print(node_id, v, "[operand_1: %{}] [operand_2: %{}]", v.operand_1_node_id, v.operand_2_node_id);
     }
 
     auto visit(IR::LessThanEqualInstruction &v, IR::NodeID node_id) -> void override {
-        print(node_id, v, "[lhs: %{}] [rhs: %{}]", std::to_underlying(v.operand_1), std::to_underlying(v.operand_2));
+        print(node_id, v, "[operand_1: %{}] [operand_2: %{}]", v.operand_1_node_id, v.operand_2_node_id);
+    }
+
+    auto visit(IR::LogicalNotInstruction &v, IR::NodeID node_id) -> void override {
+        print(node_id, v, "[dst: %{}]", v.dst_node_id);
+    }
+
+    auto visit(IR::SelectInstruction &v, IR::NodeID node_id) -> void override {
+        print(node_id, v, "[condition: %{}] [operand_1: %{}] [operand_2: %{}]", v.condition_node_id, v.operand_1_node_id, v.operand_2_node_id);
     }
 
     auto visit(IR::FunctionCallInstruction &v, IR::NodeID node_id) -> void override {
-        auto str = fmt::format("[callee: %{}]", std::to_underlying(v.callee_node_id));
+        auto str = fmt::format("[callee: %{}]", v.callee_node_id);
         for (auto param_node_id : v.param_node_ids) {
-            str += fmt::format(" [param: %{}]", std::to_underlying(param_node_id));
+            str += fmt::format(" [param: %{}]", param_node_id);
         }
 
         print(node_id, v, "{}", str);
@@ -742,7 +762,7 @@ struct IRPrinter : IR::Visitor {
             node_id,
             v,
             "[dst_node_id: %{}] [decoration: {}] [operand: {}]",
-            std::to_underlying(v.target_node_id),
+            v.target_node_id,
             decoration_kind_to_str(v.decoration_kind),
             decoration_operand_to_str(v.decoration_kind, v.operand)
         );
@@ -753,7 +773,7 @@ struct IRPrinter : IR::Visitor {
             node_id,
             v,
             "[dst_struct_id: %{}] [decoration: {}] [operand: {}]",
-            std::to_underlying(v.target_struct_node_id),
+            v.target_struct_node_id,
             decoration_kind_to_str(v.decoration_kind),
             decoration_operand_to_str(v.decoration_kind, v.operand)
         );
@@ -762,21 +782,14 @@ struct IRPrinter : IR::Visitor {
     auto visit(IR::Struct &v, IR::NodeID node_id) -> void override {
         auto str = std::string{};
         for (const auto &[type_node_ids, field_index] : std::views::zip(v.field_type_node_ids, std::views::iota(0_u32))) {
-            str += fmt::format("[field{}_type: %{}] ", field_index, std::to_underlying(type_node_ids));
+            str += fmt::format("[field{}_type: %{}] ", field_index, type_node_ids);
         }
 
         print(node_id, v, "{}", str);
     }
 
     auto visit(IR::EntryPoint &v, IR::NodeID node_id) -> void override {
-        print(
-            node_id,
-            v,
-            "[kind: %{}] [function_node_id: %{}] [identifier: \"{}\"]",
-            std::to_underlying(v.shader_kind),
-            std::to_underlying(v.function_node_id),
-            v.name_str
-        );
+        print(node_id, v, "[kind: %{}] [function_node_id: %{}] [identifier: \"{}\"]", v.shader_kind, v.function_node_id, v.name_str);
     }
 };
 
