@@ -11,9 +11,9 @@ struct ModuleBuilder;
 struct BasicBlockBuilder {
     ModuleBuilder *module_builder = nullptr;
     std::vector<NodeID> instr_node_ids = {};
-    NodeID node_id = NodeID::Invalid;
+    NodeID label_node_id = NodeID::Invalid;
 
-    BasicBlockBuilder(ModuleBuilder *module_builder_, NodeID node_id_) : module_builder(module_builder_), node_id(node_id_) {};
+    BasicBlockBuilder(ModuleBuilder *module_builder_, NodeID label_node_id_) : module_builder(module_builder_), label_node_id(label_node_id_) {};
 
     auto get_underlying(this BasicBlockBuilder &) -> BasicBlock &;
     auto has_terminator(this BasicBlockBuilder &) -> bool;
@@ -25,10 +25,8 @@ struct BasicBlockBuilder {
     auto make_instr(const Node &node) -> NodeID;
 
     auto load_instr(this BasicBlockBuilder &, NodeID src_node_id, NodeID type_node_id) -> NodeID;
-    auto load_variable(this BasicBlockBuilder &, NodeID variable_node_id) -> NodeID;
     auto store_instr(this BasicBlockBuilder &, NodeID src_node_id, NodeID dst_node_id) -> void;
 
-    auto lower_variable(this BasicBlockBuilder &, std::string_view identifier, ValueKind value_kind, NodeID initializer_node_id = NodeID::Invalid) -> NodeID;
     auto lower_binary_op(this BasicBlockBuilder &, AST::BinaryOp op, NodeID type_node_id, NodeID lhs_node_id, NodeID rhs_node_id) -> NodeID;
     auto lower_expression(this BasicBlockBuilder &, AST::NodeID expression_node_id) -> NodeID;
 
@@ -38,6 +36,7 @@ struct BasicBlockBuilder {
     auto lower_binary_op_expression(this BasicBlockBuilder &, AST::BinaryExpression &expression) -> NodeID;
     auto lower_unary_expression(this BasicBlockBuilder &, AST::UnaryExpression &expression) -> NodeID;
     auto lower_function_call_expression(this BasicBlockBuilder &, AST::CallFunctionExpression &expression) -> NodeID;
+    auto lower_access_field_expression(this BasicBlockBuilder &, AST::AccessFieldExpression &expression) -> NodeID;
 };
 
 struct Module;
@@ -81,6 +80,9 @@ struct ModuleBuilder : AST::StatementVisitor {
     auto lower_type(this ModuleBuilder &, const Type &type) -> NodeID;
     auto lower_type(this ModuleBuilder &, ValueKind value_kind) -> NodeID;
     auto lower_constant(this ModuleBuilder &, const Constant &constant) -> NodeID;
+    auto lower_variable(this ModuleBuilder &, std::string_view identifier, std::string_view type_identifier, NodeID initializer_node_id) -> NodeID;
+    auto lower_variable(this ModuleBuilder &, std::string_view identifier, NodeID type_node_id, NodeID initializer_node_id) -> NodeID;
+
     auto lower_decl_var_statement(this ModuleBuilder &, AST::DeclareVarStatement &statement) -> NodeID;
     auto lower_decl_function_statement(this ModuleBuilder &, AST::DeclareFunctionStatement &statement) -> NodeID;
     auto lower_return_statement(this ModuleBuilder &, AST::ReturnStatement &statement) -> NodeID;

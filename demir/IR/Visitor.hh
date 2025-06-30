@@ -42,7 +42,6 @@ struct Visitor {
     virtual auto visit(Function &, NodeID) -> void = 0;
     virtual auto visit(Decoration &, NodeID) -> void = 0;
     virtual auto visit(MemberDecoration &, NodeID) -> void = 0;
-    virtual auto visit(Struct &, NodeID) -> void = 0;
     virtual auto visit(EntryPoint &, NodeID) -> void = 0;
 };
 } // namespace demir::IR

@@ -141,9 +141,6 @@ auto Visitor::visit(NodeID node_id) -> void {
             case NodeKind::eMemberDecoration: {
                 this->visit(cur_node->member_decoration_node, cur_node_id);
             } break;
-            case NodeKind::eStruct: {
-                this->visit(cur_node->struct_node, cur_node_id);
-            } break;
             case NodeKind::eEntryPoint: {
                 this->visit(cur_node->entry_point, cur_node_id);
             } break;

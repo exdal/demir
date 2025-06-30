@@ -52,7 +52,6 @@ enum class NodeKind : u32 {
     eFunction,
     eDecoration,
     eMemberDecoration,
-    eStruct,
     eEntryPoint,
 };
 
@@ -252,6 +251,8 @@ enum class TypeKind : u32 {
     eBool,
     eInt,
     eFloat,
+    eStruct,
+    ePointer,
 };
 
 struct Type {
@@ -259,7 +260,11 @@ struct Type {
 
     TypeKind type_kind = TypeKind::eVoid;
     u32 width = 0;
-    bool is_signed = false;
+    union {
+        bool is_signed = false;
+        NodeID *field_type_node_ids;
+        NodeID pointer_type_node_id;
+    };
 };
 
 struct Constant {
@@ -330,12 +335,6 @@ struct MemberDecoration {
     DecorationOperand operand = {};
 };
 
-struct Struct {
-    NodeKind kind = NodeKind::eStruct;
-
-    Span<NodeID> field_type_node_ids = {};
-};
-
 struct EntryPoint {
     NodeKind kind = NodeKind::eEntryPoint;
 
@@ -379,7 +378,6 @@ union Node {
     Function function_node;
     Decoration decoration_node;
     MemberDecoration member_decoration_node;
-    Struct struct_node;
     EntryPoint entry_point;
 };
 } // namespace demir::IR

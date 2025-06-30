@@ -191,8 +191,6 @@ auto instruction_kind_to_str(IR::NodeKind kind) -> std::string_view {
             return "OpLabel";
         case IR::NodeKind::eFunction:
             return "OpFunction";
-        case IR::NodeKind::eStruct:
-            return "OpStruct";
         case IR::NodeKind::eDecoration:
             return "OpDecoration";
         case IR::NodeKind::eMemberDecoration:
@@ -216,6 +214,10 @@ auto instruction_type_kind_to_str(IR::TypeKind kind) -> std::string_view {
             return "int";
         case IR::TypeKind::eFloat:
             return "float";
+        case IR::TypeKind::eStruct:
+            return "struct";
+        case IR::TypeKind::ePointer:
+            return "pointer";
     }
 }
 
@@ -588,11 +590,14 @@ struct IRPrinter : IR::Visitor {
     template<typename T, typename... Args>
     auto print(IR::NodeID node_id, T &v, fmt::format_string<Args...> str = "", Args &&...args) {
         auto f = fmt::format(str, std::forward<Args>(args)...);
+        auto id_str = fmt::format("%{}", node_id);
+        auto kind_str = instruction_kind_to_str(v.kind);
 
+        auto indent = 5;
         if constexpr (IsIRNodeWithType<T>) {
-            fmt::println(" %{:<2} = {} [type: %{}] {}", node_id, instruction_kind_to_str(v.kind), v.type_node_id, f);
+            fmt::println("{:>{}} = {} [type: %{}] {}", id_str, indent, kind_str, v.type_node_id, f);
         } else {
-            fmt::println(" %{:<2} = {} {}", node_id, instruction_kind_to_str(v.kind), f);
+            fmt::println("{:>{}} = {} {}", id_str, indent, kind_str, f);
         }
     }
 
@@ -710,7 +715,26 @@ struct IRPrinter : IR::Visitor {
     }
 
     auto visit(IR::Type &v, IR::NodeID node_id) -> void override {
-        print(node_id, v, "[kind: {}] [width: {}] [signed: {}]", instruction_type_kind_to_str(v.type_kind), v.width, v.is_signed);
+        auto type_kind_str = instruction_type_kind_to_str(v.type_kind);
+        switch (v.type_kind) {
+            case IR::TypeKind::eVoid:
+            case IR::TypeKind::eBool:
+            case IR::TypeKind::eInt:
+            case IR::TypeKind::eFloat: {
+                print(node_id, v, "[kind: {}] [width: {}] [signed: {}]", type_kind_str, v.width, v.is_signed);
+            } break;
+            case IR::TypeKind::eStruct: {
+                auto str = fmt::format("[kind: {}] [field_count: {}]", type_kind_str, v.width);
+                for (u32 field_index = 0; field_index < v.width; field_index++) {
+                    str += fmt::format(" [field{}_type: %{}]", field_index, v.field_type_node_ids[field_index]);
+                }
+
+                print(node_id, v, "{}", str);
+            } break;
+            case IR::TypeKind::ePointer: {
+                print(node_id, v, "[kind: {}] [type: %{}]", type_kind_str, v.pointer_type_node_id);
+            } break;
+        }
     }
 
     auto visit(IR::Constant &v, IR::NodeID node_id) -> void override {
@@ -718,6 +742,12 @@ struct IRPrinter : IR::Visitor {
         auto &type = type_node->type_node;
         auto value_str = std::string{};
         switch (type.type_kind) {
+            case IR::TypeKind::eVoid: {
+                value_str = "void";
+            } break;
+            case IR::TypeKind::eBool: {
+                value_str = fmt::format("{}", v.bool_value);
+            } break;
             case IR::TypeKind::eInt: {
                 switch (type.width) {
                     case 8: {
@@ -737,8 +767,13 @@ struct IRPrinter : IR::Visitor {
             } break;
             case IR::TypeKind::eFloat: {
             } break;
-            default: {
-                value_str = "0";
+            case IR::TypeKind::eStruct: {
+                for (u32 field_index = 0; field_index < type.width; field_index++) {
+                    value_str += fmt::format("[field{}_type: %{}] ", field_index, type.field_type_node_ids[field_index]);
+                }
+            } break;
+            case IR::TypeKind::ePointer: {
+                value_str = fmt::format("[pointer_type: %{}]", type.pointer_type_node_id);
             } break;
         }
 
@@ -777,15 +812,6 @@ struct IRPrinter : IR::Visitor {
             decoration_kind_to_str(v.decoration_kind),
             decoration_operand_to_str(v.decoration_kind, v.operand)
         );
-    }
-
-    auto visit(IR::Struct &v, IR::NodeID node_id) -> void override {
-        auto str = std::string{};
-        for (const auto &[type_node_ids, field_index] : std::views::zip(v.field_type_node_ids, std::views::iota(0_u32))) {
-            str += fmt::format("[field{}_type: %{}] ", field_index, type_node_ids);
-        }
-
-        print(node_id, v, "{}", str);
     }
 
     auto visit(IR::EntryPoint &v, IR::NodeID node_id) -> void override {

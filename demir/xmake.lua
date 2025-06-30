@@ -26,8 +26,12 @@ target("demir")
             target:add("defines", "DEMIR_COMPILER_MSVC=1", { force = true, public = true })
         elseif(target:has_tool("cc", "clang") or target:has_tool("cc", "clang_cl")) then
             target:add("defines", "DEMIR_COMPILER_CLANG=1", { force = true, public = true })
+            target:add("cxflags", "-Wshadow", "-Wshadow-all", "-Wno-gnu-line-marker", "-Wno-gnu-anonymous-struct",
+                "-Wno-gnu-zero-variadic-macro-arguments", "-Wno-missing-braces")
         elseif target:has_tool("cc", "gcc") then
             target:add("defines", "DEMIR_COMPILER_GCC=1", { force = true, public = true })
+            target:add("cxflags", "-Wshadow", "-Wno-gnu-line-marker", "-Wno-gnu-anonymous-struct",
+                "-Wno-gnu-zero-variadic-macro-arguments", "-Wno-missing-braces")
         end
     end)
 

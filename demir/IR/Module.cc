@@ -7,7 +7,7 @@
 #include <utility>
 
 namespace demir::IR {
-constexpr auto type_identifier_to_value_kind(std::string_view type_identifier) -> ValueKind {
+constexpr auto type_identifier_to_builtin_type(std::string_view type_identifier) -> ValueKind {
     switch (fnv64(type_identifier)) {
         case fnv64_c("bool"):
             return ValueKind::eBool;
@@ -40,7 +40,7 @@ constexpr auto type_identifier_to_value_kind(std::string_view type_identifier) -
 //  ── BASIC BLOCK BUILDER ─────────────────────────────────────────────
 
 auto BasicBlockBuilder::get_underlying(this BasicBlockBuilder &self) -> BasicBlock & {
-    return self.module_builder->get_node(self.node_id)->basic_block_node;
+    return self.module_builder->get_node(self.label_node_id)->basic_block_node;
 }
 
 auto BasicBlockBuilder::has_terminator(this BasicBlockBuilder &self) -> bool {
@@ -64,7 +64,7 @@ auto BasicBlockBuilder::has_terminator(this BasicBlockBuilder &self) -> bool {
 }
 
 auto BasicBlockBuilder::terminate_branch(this BasicBlockBuilder &self, BasicBlockBuilder &branching_block) -> NodeID {
-    return self.terminate_branch(branching_block.node_id);
+    return self.terminate_branch(branching_block.label_node_id);
 }
 
 auto BasicBlockBuilder::terminate_branch(this BasicBlockBuilder &self, NodeID branching_block_id) -> NodeID {
@@ -101,11 +101,6 @@ auto BasicBlockBuilder::load_instr(this BasicBlockBuilder &self, NodeID src_node
     return self.make_instr({ .load_instr = load_instr });
 }
 
-auto BasicBlockBuilder::load_variable(this BasicBlockBuilder &self, NodeID variable_node_id) -> NodeID {
-    auto *var_node = self.module_builder->get_node(variable_node_id);
-    return self.load_instr(variable_node_id, var_node->variable_node.type_node_id);
-}
-
 auto BasicBlockBuilder::store_instr(this BasicBlockBuilder &self, NodeID src_node_id, NodeID dst_node_id) -> void {
     auto store_instr = StoreInstruction{
         .dst_node_id = dst_node_id,
@@ -113,28 +108,6 @@ auto BasicBlockBuilder::store_instr(this BasicBlockBuilder &self, NodeID src_nod
     };
 
     self.make_instr({ .store_instr = store_instr });
-}
-
-auto BasicBlockBuilder::lower_variable(this BasicBlockBuilder &self, std::string_view identifier, ValueKind value_kind, NodeID initializer_node_id) -> NodeID {
-    auto type_node_id = NodeID::Invalid;
-    if (value_kind != ValueKind::eNone) {
-        type_node_id = self.module_builder->lower_type(value_kind);
-    } else {
-        // Implicit case, default to i32
-        type_node_id = self.module_builder->lower_type(ValueKind::ei32);
-    }
-
-    auto variable = Variable{
-        .type_node_id = type_node_id,
-    };
-    auto variable_node_id = self.make_instr({ .variable_node = variable });
-    self.module_builder->symbols.add_symbol(identifier, variable_node_id);
-
-    if (initializer_node_id != NodeID::Invalid) {
-        self.store_instr(initializer_node_id, variable_node_id);
-    }
-
-    return variable_node_id;
 }
 
 auto BasicBlockBuilder::lower_binary_op(this BasicBlockBuilder &self, AST::BinaryOp op, NodeID type_node_id, NodeID lhs_node_id, NodeID rhs_node_id) -> NodeID {
@@ -259,6 +232,9 @@ auto BasicBlockBuilder::lower_expression(this BasicBlockBuilder &self, AST::Node
         case AST::NodeKind::eCallFunctionExpression: {
             return self.lower_function_call_expression(expression_node->call_function_expression);
         }
+        case AST::NodeKind::eAccessFieldExpression: {
+            return self.lower_access_field_expression(expression_node->access_field_expression);
+        }
         default: {
             // Only expressions are allowed
             DEMIR_DEBUGBREAK();
@@ -269,19 +245,9 @@ auto BasicBlockBuilder::lower_expression(this BasicBlockBuilder &self, AST::Node
 
 auto BasicBlockBuilder::lower_identifier_expression(this BasicBlockBuilder &self, AST::IdentifierExpression &expression) -> NodeID {
     auto node_id = self.module_builder->lookup_identifier(expression.identifier);
-    if (node_id == NodeID::Invalid) {
-        return NodeID::Invalid;
-    }
+    auto type_node_id = self.module_builder->get_underlying_type_node_id(node_id);
 
-    auto *node = self.module_builder->get_node(node_id);
-    switch (node->kind) {
-        case NodeKind::eVariable: {
-            return self.load_variable(node_id);
-        } break;
-        default:;
-    }
-
-    return node_id;
+    return self.load_instr(node_id, type_node_id);
 }
 
 auto BasicBlockBuilder::lower_constant_expression(this BasicBlockBuilder &self, AST::ConstantValueExpression &expression) -> NodeID {
@@ -405,6 +371,10 @@ auto BasicBlockBuilder::lower_function_call_expression(this BasicBlockBuilder &s
     return self.make_instr({ .function_call_instr = function_call_instr });
 }
 
+auto BasicBlockBuilder::lower_access_field_expression(this BasicBlockBuilder &self, AST::AccessFieldExpression &expression) -> NodeID {
+    return self.lower_expression(expression.lhs_expression_id);
+}
+
 //  ── MODULE BUILDER ──────────────────────────────────────────────────
 
 auto ModuleBuilder::build(this ModuleBuilder &self, Span<AST::NodeID> global_ast_node_ids, AST::NodeID entry_point_node_id) -> Module {
@@ -417,7 +387,7 @@ auto ModuleBuilder::build(this ModuleBuilder &self, Span<AST::NodeID> global_ast
                 global_ir_node_ids.push_back(self.lower_decl_var_statement(node->decl_var_statement));
             } break;
             case AST::NodeKind::eDeclareStructStatement: {
-                global_ir_node_ids.push_back(self.lower_decl_struct_statement(node->decl_struct_statement));
+                self.lower_decl_struct_statement(node->decl_struct_statement);
             } break;
             case AST::NodeKind::eDeclareFunctionStatement: {
                 global_ir_node_ids.push_back(self.reserve_function(node->decl_function_statement.identifier));
@@ -475,12 +445,12 @@ auto ModuleBuilder::make_block_builder(this ModuleBuilder &self, NodeID basic_bl
 }
 
 auto ModuleBuilder::end_block_builder(this ModuleBuilder &self, BasicBlockBuilder &&basic_block_builder) -> NodeID {
-    auto *node = self.get_node(basic_block_builder.node_id);
+    auto *node = self.get_node(basic_block_builder.label_node_id);
     auto &basic_block = node->basic_block_node;
 
     basic_block.instruction_ids = self.allocator->copy_into(Span(basic_block_builder.instr_node_ids));
 
-    return basic_block_builder.node_id;
+    return basic_block_builder.label_node_id;
 }
 
 auto ModuleBuilder::release_block_builder(this ModuleBuilder &self, BasicBlockBuilder &&basic_block_builder) -> void {
@@ -551,7 +521,6 @@ auto ModuleBuilder::get_underlying_type_node_id(this ModuleBuilder &self, NodeID
         case NodeKind::eBasicBlock:
         case NodeKind::eDecoration:
         case NodeKind::eMemberDecoration:
-        case NodeKind::eStruct:
         case NodeKind::eEntryPoint:;
     }
 
@@ -559,9 +528,7 @@ auto ModuleBuilder::get_underlying_type_node_id(this ModuleBuilder &self, NodeID
 }
 
 auto ModuleBuilder::lookup_identifier(this ModuleBuilder &self, std::string_view identifier_str) -> NodeID {
-    auto var_node_id = self.symbols.lookup(identifier_str);
-
-    return var_node_id.value_or(NodeID::Invalid);
+    return self.symbols.lookup(identifier_str).value_or(NodeID::Invalid);
 }
 
 auto ModuleBuilder::reserve_function(this ModuleBuilder &self, std::string_view identifier_str) -> NodeID {
@@ -628,11 +595,14 @@ auto ModuleBuilder::lower_type(this ModuleBuilder &self, const Type &type) -> No
             case TypeKind::eFloat: {
                 is_same = type.width == cur_type.width;
             } break;
-            default: {
-                // Wrong instruction
-                DEMIR_DEBUGBREAK();
-                return NodeID::Invalid;
-            }
+            case TypeKind::eStruct: {
+                auto lhs_span = Span(type.field_type_node_ids, type.width);
+                auto rhs_span = Span(cur_type.field_type_node_ids, cur_type.width);
+                is_same = std::ranges::equal(lhs_span, rhs_span);
+            } break;
+            case TypeKind::ePointer: {
+                is_same = type.pointer_type_node_id == cur_type.pointer_type_node_id;
+            } break;
         }
 
         if (is_same) {
@@ -649,10 +619,10 @@ auto ModuleBuilder::lower_type(this ModuleBuilder &self, const Type &type) -> No
 auto ModuleBuilder::lower_type(this ModuleBuilder &self, ValueKind value_kind) -> NodeID {
     switch (value_kind) {
         case ValueKind::eNone: {
-            return self.lower_type(Type{ .type_kind = TypeKind::eVoid });
+            return self.lower_type(Type{ .type_kind = TypeKind::eVoid, .is_signed = false });
         }
         case ValueKind::eBool: {
-            return self.lower_type(Type{ .type_kind = TypeKind::eBool });
+            return self.lower_type(Type{ .type_kind = TypeKind::eBool, .is_signed = false });
         }
         case ValueKind::ei8: {
             return self.lower_type(Type{ .type_kind = TypeKind::eInt, .width = 8, .is_signed = true });
@@ -679,10 +649,10 @@ auto ModuleBuilder::lower_type(this ModuleBuilder &self, ValueKind value_kind) -
             return self.lower_type(Type{ .type_kind = TypeKind::eInt, .width = 64, .is_signed = true });
         }
         case ValueKind::ef32: {
-            return self.lower_type(Type{ .type_kind = TypeKind::eFloat, .width = 32 });
+            return self.lower_type(Type{ .type_kind = TypeKind::eFloat, .width = 32, .is_signed = false });
         }
         case ValueKind::ef64: {
-            return self.lower_type(Type{ .type_kind = TypeKind::eFloat, .width = 64 });
+            return self.lower_type(Type{ .type_kind = TypeKind::eFloat, .width = 64, .is_signed = false });
         }
         default:;
     }
@@ -715,6 +685,59 @@ auto ModuleBuilder::lower_constant(this ModuleBuilder &self, const Constant &con
     return new_const_node_id;
 }
 
+auto ModuleBuilder::lower_variable(
+    this ModuleBuilder &self, //
+    std::string_view identifier,
+    std::string_view type_identifier,
+    NodeID initializer_node_id
+) -> NodeID {
+    auto type_node_id = NodeID::Invalid;
+
+    if (!type_identifier.empty()) {
+        // the type is explicitly defined, do a simple lookup
+        auto builtin_value_kind = type_identifier_to_builtin_type(type_identifier);
+        if (builtin_value_kind != ValueKind::eNone) {
+            type_node_id = self.lower_type(builtin_value_kind);
+        } else {
+            type_node_id = self.lookup_identifier(type_identifier);
+        }
+    } else {
+        // the type is implictly defined, search previous nodes
+        type_node_id = self.get_underlying_type_node_id(initializer_node_id);
+    }
+
+    DEMIR_EXPECT(type_node_id != NodeID::Invalid);
+
+    // determine type kind of type_node
+    auto *node = self.get_node(type_node_id);
+    if (node->kind == NodeKind::eType) {
+        auto &type = node->type_node;
+        if (type.type_kind == TypeKind::eStruct) {
+            type_node_id = self.lower_type(Type{ .type_kind = TypeKind::ePointer, .pointer_type_node_id = type_node_id });
+        }
+    }
+
+    return self.lower_variable(identifier, type_node_id, initializer_node_id);
+}
+
+auto ModuleBuilder::lower_variable(this ModuleBuilder &self, std::string_view identifier, NodeID type_node_id, NodeID initializer_node_id) -> NodeID {
+    auto block_builder = self.acquire_block_builder();
+
+    auto variable = Variable{
+        .type_node_id = type_node_id,
+    };
+    auto variable_node_id = block_builder.make_instr({ .variable_node = variable });
+    self.symbols.add_symbol(identifier, variable_node_id);
+
+    if (initializer_node_id != NodeID::Invalid) {
+        block_builder.store_instr(initializer_node_id, variable_node_id);
+    }
+
+    self.release_block_builder(std::move(block_builder));
+
+    return variable_node_id;
+}
+
 auto ModuleBuilder::lower_decl_var_statement(this ModuleBuilder &self, AST::DeclareVarStatement &statement) -> NodeID {
     auto block_builder = self.acquire_block_builder();
 
@@ -723,8 +746,9 @@ auto ModuleBuilder::lower_decl_var_statement(this ModuleBuilder &self, AST::Decl
         initializer_node_id = block_builder.lower_expression(statement.initial_expression_id);
     }
 
-    auto var_type_kind = type_identifier_to_value_kind(statement.type_identifier);
-    auto variable_node_id = block_builder.lower_variable(statement.identifier, var_type_kind, initializer_node_id);
+    self.release_block_builder(std::move(block_builder));
+    auto variable_node_id = self.lower_variable(statement.identifier, statement.type_identifier, initializer_node_id);
+    block_builder = self.acquire_block_builder();
 
     for (const auto &attribute : statement.attributes) {
         switch (attribute.kind) {
@@ -744,11 +768,11 @@ auto ModuleBuilder::lower_decl_function_statement(this ModuleBuilder &self, AST:
     //  ── FUNCTION HEADER ─────────────────────────────────────────────────
     auto param_type_node_ids = std::vector<NodeID>();
     for (const auto &param : statement.parameters) {
-        auto param_type_kind = type_identifier_to_value_kind(param.type_identifier);
+        auto param_type_kind = type_identifier_to_builtin_type(param.type_identifier);
         param_type_node_ids.push_back(self.lower_type(param_type_kind));
     }
 
-    auto return_type_kind = type_identifier_to_value_kind(statement.return_type_identifier);
+    auto return_type_kind = type_identifier_to_builtin_type(statement.return_type_identifier);
     auto return_type_node_id = self.lower_type(return_type_kind);
     auto block_builder = self.make_block_builder();
 
@@ -760,15 +784,16 @@ auto ModuleBuilder::lower_decl_function_statement(this ModuleBuilder &self, AST:
         auto &func = func_node->function_node;
         func.type_node_id = return_type_node_id;
         func.parameter_type_node_ids = self.allocator->copy_into(Span(param_type_node_ids));
-        func.first_basic_block_node_id = block_builder.node_id;
+        func.first_basic_block_node_id = block_builder.label_node_id;
     }
 
     //  ── FUNCTION BODY ───────────────────────────────────────────────────
     self.symbols.push_scope();
+    self.release_block_builder(std::move(block_builder));
     for (const auto &param : statement.parameters) {
-        auto param_type_kind = type_identifier_to_value_kind(param.type_identifier);
-        block_builder.lower_variable(param.identifier, param_type_kind);
+        self.lower_variable(param.identifier, param.type_identifier, NodeID::Invalid);
     }
+    block_builder = self.acquire_block_builder();
 
     self.release_block_builder(std::move(block_builder));
     self.visit(statement.body_statement_id);
@@ -778,7 +803,8 @@ auto ModuleBuilder::lower_decl_function_statement(this ModuleBuilder &self, AST:
 
     // Insert implicit return when available
     if (!last_block_builder.has_terminator()) {
-        last_block_builder.terminate_return(NodeID::Invalid);
+        auto void_type = self.lower_type(ValueKind::eNone);
+        last_block_builder.terminate_return(void_type);
     }
 
     self.end_block_builder(std::move(last_block_builder));
@@ -1049,18 +1075,22 @@ auto ModuleBuilder::lower_decl_struct_statement(this ModuleBuilder &self, AST::D
 
     auto field_types = std::vector<NodeID>();
     for (const auto &field : statement.fields) {
-        auto field_type_kind = type_identifier_to_value_kind(field.type_identifier);
+        auto field_type_kind = type_identifier_to_builtin_type(field.type_identifier);
         field_types.push_back(self.lower_type(field_type_kind));
     }
 
-    auto struct_node = Struct{
-        .field_type_node_ids = self.allocator->copy_into(Span(field_types)),
+    auto struct_fields = self.allocator->copy_into(Span(field_types));
+    auto struct_type = Type{
+        .type_kind = TypeKind::eStruct,
+        .width = static_cast<u32>(struct_fields.size()),
+        .field_type_node_ids = struct_fields.data(),
     };
-    auto struct_node_id = self.make_node({ .struct_node = struct_node });
+    auto struct_node_id = self.lower_type(struct_type);
+    self.symbols.add_symbol(statement.identifier, struct_node_id);
 
     auto struct_layout = StructLayout(struct_layout_kind);
     for (const auto &[field, member_index] : std::views::zip(statement.fields, std::views::iota(0_sz))) {
-        auto field_type_kind = type_identifier_to_value_kind(field.type_identifier);
+        auto field_type_kind = type_identifier_to_builtin_type(field.type_identifier);
         auto field_offset = struct_layout.add_field(field_type_kind);
         self.decorate_struct_member(struct_node_id, member_index, DecorationKind::eOffset, DecorationOperand{ .byte_offset = field_offset });
     }
