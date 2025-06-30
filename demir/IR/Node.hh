@@ -21,6 +21,7 @@ enum class NodeKind : u32 {
     // Memory instructions
     eLoad,
     eStore,
+    eAccessChain,
 
     // Arithmatic instructions
     eAdd,
@@ -127,6 +128,14 @@ struct StoreInstruction {
 
     NodeID dst_node_id = NodeID::Invalid;
     NodeID src_node_id = NodeID::Invalid;
+};
+
+struct AccessChainInstruction {
+    NodeKind kind = NodeKind::eAccessChain;
+
+    NodeID type_node_id = NodeID::Invalid;
+    NodeID base_node_id = NodeID::Invalid;
+    NodeID index_node_id = NodeID::Invalid;
 };
 
 struct AddInstruction {
@@ -256,13 +265,18 @@ enum class TypeKind : u32 {
 };
 
 struct Type {
+    struct StructField {
+        std::string_view identifier = {};
+        NodeID type_node_id = NodeID::Invalid;
+    };
+
     NodeKind kind = NodeKind::eType;
 
     TypeKind type_kind = TypeKind::eVoid;
     u32 width = 0;
     union {
         bool is_signed = false;
-        NodeID *field_type_node_ids;
+        StructField *fields;
         NodeID pointer_type_node_id;
     };
 };
@@ -355,11 +369,12 @@ union Node {
     MultiwayBranchInstruction multiway_branch_instr;
     LoadInstruction load_instr;
     StoreInstruction store_instr;
+    AccessChainInstruction access_chain_instr;
     AddInstruction add_instr;
     SubInstruction sub_instr;
     MulInstruction mul_instr;
     NegateInstruction negate_instr;
-    BitNotInstruction bit_not_instruction;
+    BitNotInstruction bit_not_instr;
     DivInstruction div_instr;
     EqualInstruction equal_instr;
     NotEqualInstruction not_equal_instr;
@@ -371,13 +386,13 @@ union Node {
     SelectInstruction select_instr;
     FunctionCallInstruction function_call_instr;
 
-    Type type_node;
-    Constant constant_node;
-    Variable variable_node;
-    BasicBlock basic_block_node;
-    Function function_node;
-    Decoration decoration_node;
-    MemberDecoration member_decoration_node;
+    Type type;
+    Constant constant;
+    Variable variable;
+    BasicBlock basic_block;
+    Function function;
+    Decoration decoration;
+    MemberDecoration member_decoration;
     EntryPoint entry_point;
 };
 } // namespace demir::IR

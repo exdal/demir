@@ -40,7 +40,7 @@ constexpr auto type_identifier_to_builtin_type(std::string_view type_identifier)
 //  ── BASIC BLOCK BUILDER ─────────────────────────────────────────────
 
 auto BasicBlockBuilder::get_underlying(this BasicBlockBuilder &self) -> BasicBlock & {
-    return self.module_builder->get_node(self.label_node_id)->basic_block_node;
+    return self.module_builder->get_node(self.label_node_id)->basic_block;
 }
 
 auto BasicBlockBuilder::has_terminator(this BasicBlockBuilder &self) -> bool {
@@ -246,6 +246,16 @@ auto BasicBlockBuilder::lower_expression(this BasicBlockBuilder &self, AST::Node
 auto BasicBlockBuilder::lower_identifier_expression(this BasicBlockBuilder &self, AST::IdentifierExpression &expression) -> NodeID {
     auto node_id = self.module_builder->lookup_identifier(expression.identifier);
     auto type_node_id = self.module_builder->get_underlying_type_node_id(node_id);
+    auto *type_node = self.module_builder->get_node(type_node_id);
+    auto &type = type_node->type;
+
+    switch (type.type_kind) {
+        case TypeKind::eStruct:
+        case TypeKind::ePointer: {
+            return node_id;
+        }
+        default:;
+    }
 
     return self.load_instr(node_id, type_node_id);
 }
@@ -334,7 +344,7 @@ auto BasicBlockBuilder::lower_unary_expression(this BasicBlockBuilder &self, AST
             auto instr = BitNotInstruction{
                 .dst_node_id = rhs_node_id,
             };
-            return self.make_instr({ .bit_not_instruction = instr });
+            return self.make_instr({ .bit_not_instr = instr });
         }
         case AST::UnaryOp::ePlus: {
             return rhs_node_id;
@@ -372,7 +382,34 @@ auto BasicBlockBuilder::lower_function_call_expression(this BasicBlockBuilder &s
 }
 
 auto BasicBlockBuilder::lower_access_field_expression(this BasicBlockBuilder &self, AST::AccessFieldExpression &expression) -> NodeID {
-    return self.lower_expression(expression.lhs_expression_id);
+    auto lhs_node_id = self.lower_expression(expression.lhs_expression_id);
+    auto var_node_id = self.module_builder->get_underlying_type_node_id(lhs_node_id);
+    auto struct_type_node_id = self.module_builder->get_underlying_type_node_id(var_node_id, true);
+    auto *struct_type_node = self.module_builder->get_node(struct_type_node_id);
+    auto &type = struct_type_node->type;
+    auto fields = Span(type.fields, type.width);
+
+    auto field_index = 0;
+    auto field_type_node_id = NodeID::Invalid;
+    for (const auto &[field, i] : std::views::zip(fields, std::views::iota(0_i32))) {
+        if (field.identifier == expression.identifier) {
+            field_index = i;
+            field_type_node_id = field.type_node_id;
+            break;
+        }
+    }
+
+    auto access_index_type_node_id = self.module_builder->lower_type(ValueKind::ei32);
+    auto access_index_node_id = self.module_builder->lower_constant(Constant{ .type_node_id = access_index_type_node_id, .i32_value = field_index });
+
+    auto access_chain_instr = AccessChainInstruction{
+        .type_node_id = field_type_node_id,
+        .base_node_id = lhs_node_id,
+        .index_node_id = access_index_node_id,
+    };
+    auto access_chain_instr_id = self.make_instr({ .access_chain_instr = access_chain_instr });
+
+    return self.load_instr(access_chain_instr_id, field_type_node_id);
 }
 
 //  ── MODULE BUILDER ──────────────────────────────────────────────────
@@ -433,7 +470,7 @@ auto ModuleBuilder::get_node(this ModuleBuilder &self, NodeID node_id) -> Node *
 }
 
 auto ModuleBuilder::make_block(this ModuleBuilder &self) -> NodeID {
-    return self.make_node({ .basic_block_node = {} });
+    return self.make_node({ .basic_block = {} });
 }
 
 auto ModuleBuilder::make_block_builder(this ModuleBuilder &self) -> BasicBlockBuilder {
@@ -446,7 +483,7 @@ auto ModuleBuilder::make_block_builder(this ModuleBuilder &self, NodeID basic_bl
 
 auto ModuleBuilder::end_block_builder(this ModuleBuilder &self, BasicBlockBuilder &&basic_block_builder) -> NodeID {
     auto *node = self.get_node(basic_block_builder.label_node_id);
-    auto &basic_block = node->basic_block_node;
+    auto &basic_block = node->basic_block;
 
     basic_block.instruction_ids = self.allocator->copy_into(Span(basic_block_builder.instr_node_ids));
 
@@ -477,11 +514,12 @@ auto ModuleBuilder::pop_scope(this ModuleBuilder &self) -> void {
     self.symbols.pop_scope();
 }
 
-auto ModuleBuilder::get_underlying_type_node_id(this ModuleBuilder &self, NodeID node_id) -> NodeID {
+auto ModuleBuilder::get_underlying_type_node_id(this ModuleBuilder &self, NodeID node_id, bool visit_pointers) -> NodeID {
     auto *cur_node = self.get_node(node_id);
     switch (cur_node->kind) {
         // Nodes that have type node ids
         case NodeKind::eLoad:
+        case NodeKind::eAccessChain:
         case NodeKind::eAdd:
         case NodeKind::eSub:
         case NodeKind::eMul:
@@ -496,11 +534,20 @@ auto ModuleBuilder::get_underlying_type_node_id(this ModuleBuilder &self, NodeID
         case NodeKind::eLessThanEqual:
         case NodeKind::eLogicalNot:
         case NodeKind::eSelect:
-        case NodeKind::eType:
         case NodeKind::eConstant:
         case NodeKind::eVariable:
         case NodeKind::eFunction: {
             return cur_node->load_instr.type_node_id;
+        }
+
+        // Special case for eType when its kind is pointer
+        case NodeKind::eType: {
+            auto &type = cur_node->type;
+            if (visit_pointers && type.type_kind == TypeKind::ePointer) {
+                return self.get_underlying_type_node_id(type.pointer_type_node_id);
+            }
+
+            return node_id;
         }
 
         // Nodes that point to a node with type node id
@@ -532,7 +579,7 @@ auto ModuleBuilder::lookup_identifier(this ModuleBuilder &self, std::string_view
 }
 
 auto ModuleBuilder::reserve_function(this ModuleBuilder &self, std::string_view identifier_str) -> NodeID {
-    auto node_id = self.make_node({ .function_node = {} });
+    auto node_id = self.make_node({ .function = {} });
     self.symbols.add_symbol(identifier_str, node_id, 0_sz);
 
     return node_id;
@@ -544,7 +591,7 @@ auto ModuleBuilder::decorate_node(this ModuleBuilder &self, NodeID target_node_i
         .decoration_kind = kind,
         .operand = operand,
     };
-    auto node_id = self.make_node({ .decoration_node = decoration });
+    auto node_id = self.make_node({ .decoration = decoration });
 
     self.global_node_ids.push_back(node_id);
 
@@ -564,11 +611,20 @@ auto ModuleBuilder::decorate_struct_member(
         .decoration_kind = kind,
         .operand = operand,
     };
-    auto node_id = self.make_node({ .member_decoration_node = member_decoration });
+    auto node_id = self.make_node({ .member_decoration = member_decoration });
 
     self.global_node_ids.push_back(node_id);
 
     return node_id;
+}
+
+auto ModuleBuilder::lower_type(this ModuleBuilder &self, std::string_view type_identifier) -> NodeID {
+    auto builtin_value_kind = type_identifier_to_builtin_type(type_identifier);
+    if (builtin_value_kind != ValueKind::eNone) {
+        return self.lower_type(builtin_value_kind);
+    }
+
+    return self.lookup_identifier(type_identifier);
 }
 
 auto ModuleBuilder::lower_type(this ModuleBuilder &self, const Type &type) -> NodeID {
@@ -578,7 +634,7 @@ auto ModuleBuilder::lower_type(this ModuleBuilder &self, const Type &type) -> No
             continue;
         }
 
-        auto &cur_type = cur_node->type_node;
+        auto &cur_type = cur_node->type;
         if (cur_type.type_kind != type.type_kind) {
             continue;
         }
@@ -596,9 +652,17 @@ auto ModuleBuilder::lower_type(this ModuleBuilder &self, const Type &type) -> No
                 is_same = type.width == cur_type.width;
             } break;
             case TypeKind::eStruct: {
-                auto lhs_span = Span(type.field_type_node_ids, type.width);
-                auto rhs_span = Span(cur_type.field_type_node_ids, cur_type.width);
-                is_same = std::ranges::equal(lhs_span, rhs_span);
+                auto lhs_span = Span(type.fields, type.width);
+                auto rhs_span = Span(cur_type.fields, cur_type.width);
+                if (lhs_span.size() == rhs_span.size()) {
+                    is_same = true;
+                    for (const auto &[lhs, rhs] : std::views::zip(lhs_span, rhs_span)) {
+                        if (lhs.type_node_id != rhs.type_node_id || lhs.identifier != rhs.identifier) {
+                            is_same = false;
+                            break;
+                        }
+                    }
+                }
             } break;
             case TypeKind::ePointer: {
                 is_same = type.pointer_type_node_id == cur_type.pointer_type_node_id;
@@ -610,7 +674,7 @@ auto ModuleBuilder::lower_type(this ModuleBuilder &self, const Type &type) -> No
         }
     }
 
-    auto new_type_node_id = self.make_node({ .type_node = type });
+    auto new_type_node_id = self.make_node({ .type = type });
     self.global_node_ids.push_back(new_type_node_id);
 
     return new_type_node_id;
@@ -669,7 +733,7 @@ auto ModuleBuilder::lower_constant(this ModuleBuilder &self, const Constant &con
             continue;
         }
 
-        auto &cur_const = cur_node->constant_node;
+        auto &cur_const = cur_node->constant;
         if (cur_const.type_node_id != constant.type_node_id) {
             continue;
         }
@@ -679,7 +743,7 @@ auto ModuleBuilder::lower_constant(this ModuleBuilder &self, const Constant &con
         }
     }
 
-    auto new_const_node_id = self.make_node({ .constant_node = constant });
+    auto new_const_node_id = self.make_node({ .constant = constant });
     self.global_node_ids.push_back(new_const_node_id);
 
     return new_const_node_id;
@@ -694,27 +758,20 @@ auto ModuleBuilder::lower_variable(
     auto type_node_id = NodeID::Invalid;
 
     if (!type_identifier.empty()) {
-        // the type is explicitly defined, do a simple lookup
-        auto builtin_value_kind = type_identifier_to_builtin_type(type_identifier);
-        if (builtin_value_kind != ValueKind::eNone) {
-            type_node_id = self.lower_type(builtin_value_kind);
-        } else {
-            type_node_id = self.lookup_identifier(type_identifier);
-        }
+        type_node_id = self.lower_type(type_identifier);
     } else {
         // the type is implictly defined, search previous nodes
         type_node_id = self.get_underlying_type_node_id(initializer_node_id);
     }
 
     DEMIR_EXPECT(type_node_id != NodeID::Invalid);
+    auto *node = self.get_node(type_node_id);
+    DEMIR_EXPECT(node->kind == NodeKind::eType);
 
     // determine type kind of type_node
-    auto *node = self.get_node(type_node_id);
-    if (node->kind == NodeKind::eType) {
-        auto &type = node->type_node;
-        if (type.type_kind == TypeKind::eStruct) {
-            type_node_id = self.lower_type(Type{ .type_kind = TypeKind::ePointer, .pointer_type_node_id = type_node_id });
-        }
+    auto &type = node->type;
+    if (type.type_kind == TypeKind::eStruct) {
+        type_node_id = self.lower_type(Type{ .type_kind = TypeKind::ePointer, .pointer_type_node_id = type_node_id });
     }
 
     return self.lower_variable(identifier, type_node_id, initializer_node_id);
@@ -726,7 +783,7 @@ auto ModuleBuilder::lower_variable(this ModuleBuilder &self, std::string_view id
     auto variable = Variable{
         .type_node_id = type_node_id,
     };
-    auto variable_node_id = block_builder.make_instr({ .variable_node = variable });
+    auto variable_node_id = block_builder.make_instr({ .variable = variable });
     self.symbols.add_symbol(identifier, variable_node_id);
 
     if (initializer_node_id != NodeID::Invalid) {
@@ -768,12 +825,16 @@ auto ModuleBuilder::lower_decl_function_statement(this ModuleBuilder &self, AST:
     //  ── FUNCTION HEADER ─────────────────────────────────────────────────
     auto param_type_node_ids = std::vector<NodeID>();
     for (const auto &param : statement.parameters) {
-        auto param_type_kind = type_identifier_to_builtin_type(param.type_identifier);
-        param_type_node_ids.push_back(self.lower_type(param_type_kind));
+        param_type_node_ids.push_back(self.lower_type(param.type_identifier));
     }
 
-    auto return_type_kind = type_identifier_to_builtin_type(statement.return_type_identifier);
-    auto return_type_node_id = self.lower_type(return_type_kind);
+    auto return_type_node_id = NodeID::Invalid;
+    if (!statement.return_type_identifier.empty()) {
+        return_type_node_id = self.lower_type(statement.return_type_identifier);
+    } else {
+        return_type_node_id = self.lower_type(ValueKind::eNone);
+    }
+
     auto block_builder = self.make_block_builder();
 
     // functions are reserved before visiting
@@ -781,7 +842,7 @@ auto ModuleBuilder::lower_decl_function_statement(this ModuleBuilder &self, AST:
     auto func_node_id = self.symbols.lookup(statement.identifier, 0_sz);
     if (func_node_id.has_value()) {
         auto *func_node = self.get_node(func_node_id.value());
-        auto &func = func_node->function_node;
+        auto &func = func_node->function;
         func.type_node_id = return_type_node_id;
         func.parameter_type_node_ids = self.allocator->copy_into(Span(param_type_node_ids));
         func.first_basic_block_node_id = block_builder.label_node_id;
@@ -1073,17 +1134,16 @@ auto ModuleBuilder::lower_decl_struct_statement(this ModuleBuilder &self, AST::D
         }
     }
 
-    auto field_types = std::vector<NodeID>();
+    auto struct_fields = std::vector<Type::StructField>();
     for (const auto &field : statement.fields) {
-        auto field_type_kind = type_identifier_to_builtin_type(field.type_identifier);
-        field_types.push_back(self.lower_type(field_type_kind));
+        auto field_type_node_id = self.lower_type(field.type_identifier);
+        struct_fields.push_back({ .identifier = field.identifier, .type_node_id = field_type_node_id });
     }
 
-    auto struct_fields = self.allocator->copy_into(Span(field_types));
     auto struct_type = Type{
         .type_kind = TypeKind::eStruct,
         .width = static_cast<u32>(struct_fields.size()),
-        .field_type_node_ids = struct_fields.data(),
+        .fields = self.allocator->copy_into(Span(struct_fields)).data(),
     };
     auto struct_node_id = self.lower_type(struct_type);
     self.symbols.add_symbol(statement.identifier, struct_node_id);

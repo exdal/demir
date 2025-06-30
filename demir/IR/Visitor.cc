@@ -70,6 +70,9 @@ auto Visitor::visit(NodeID node_id) -> void {
             case NodeKind::eStore: {
                 this->visit(cur_node->store_instr, cur_node_id);
             } break;
+            case NodeKind::eAccessChain: {
+                this->visit(cur_node->access_chain_instr, cur_node_id);
+            } break;
             case NodeKind::eAdd: {
                 this->visit(cur_node->add_instr, cur_node_id);
             } break;
@@ -86,7 +89,7 @@ auto Visitor::visit(NodeID node_id) -> void {
                 this->visit(cur_node->negate_instr, cur_node_id);
             } break;
             case NodeKind::eBitNot: {
-                this->visit(cur_node->bit_not_instruction, cur_node_id);
+                this->visit(cur_node->bit_not_instr, cur_node_id);
             } break;
             case NodeKind::eEqual: {
                 this->visit(cur_node->equal_instr, cur_node_id);
@@ -116,30 +119,30 @@ auto Visitor::visit(NodeID node_id) -> void {
                 this->visit(cur_node->function_call_instr, cur_node_id);
             } break;
             case NodeKind::eType: {
-                this->visit(cur_node->type_node, cur_node_id);
+                this->visit(cur_node->type, cur_node_id);
             } break;
             case NodeKind::eConstant: {
-                this->visit(cur_node->constant_node, cur_node_id);
+                this->visit(cur_node->constant, cur_node_id);
             } break;
             case NodeKind::eVariable: {
-                this->visit(cur_node->variable_node, cur_node_id);
+                this->visit(cur_node->variable, cur_node_id);
             } break;
             case NodeKind::eBasicBlock: {
-                auto &basic_block = cur_node->basic_block_node;
+                auto &basic_block = cur_node->basic_block;
                 this->visit(basic_block, cur_node_id);
                 for (auto v : basic_block.instruction_ids | std::views::reverse) {
                     dfs_stack.push(v);
                 }
             } break;
             case NodeKind::eFunction: {
-                this->visit(cur_node->function_node, cur_node_id);
-                dfs_stack.push(cur_node->function_node.first_basic_block_node_id);
+                this->visit(cur_node->function, cur_node_id);
+                dfs_stack.push(cur_node->function.first_basic_block_node_id);
             } break;
             case NodeKind::eDecoration: {
-                this->visit(cur_node->decoration_node, cur_node_id);
+                this->visit(cur_node->decoration, cur_node_id);
             } break;
             case NodeKind::eMemberDecoration: {
-                this->visit(cur_node->member_decoration_node, cur_node_id);
+                this->visit(cur_node->member_decoration, cur_node_id);
             } break;
             case NodeKind::eEntryPoint: {
                 this->visit(cur_node->entry_point, cur_node_id);

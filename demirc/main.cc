@@ -201,6 +201,8 @@ auto instruction_kind_to_str(IR::NodeKind kind) -> std::string_view {
             return "OpSelect";
         case IR::NodeKind::eLogicalNot:
             return "OpLogicalNot";
+        case IR::NodeKind::eAccessChain:
+            return "OpAccessChain";
     }
 }
 
@@ -649,6 +651,10 @@ struct IRPrinter : IR::Visitor {
         print(node_id, v, "[dst: %{}] [src: %{}]", v.dst_node_id, v.src_node_id);
     }
 
+    auto visit(IR::AccessChainInstruction &v, IR::NodeID node_id) -> void override {
+        print(node_id, v, "[base_node_id: %{}] [access_index: %{}]", v.base_node_id, v.index_node_id);
+    }
+
     auto visit(IR::AddInstruction &v, IR::NodeID node_id) -> void override {
         print(node_id, v, "[operand_1: %{}] [operand_2: %{}]", v.operand_1_node_id, v.operand_2_node_id);
     }
@@ -726,7 +732,8 @@ struct IRPrinter : IR::Visitor {
             case IR::TypeKind::eStruct: {
                 auto str = fmt::format("[kind: {}] [field_count: {}]", type_kind_str, v.width);
                 for (u32 field_index = 0; field_index < v.width; field_index++) {
-                    str += fmt::format(" [field{}_type: %{}]", field_index, v.field_type_node_ids[field_index]);
+                    auto &field = v.fields[field_index];
+                    str += fmt::format(" [field {}: identifier = {}, type_node_id = %{}]", field_index, field.identifier, field.type_node_id);
                 }
 
                 print(node_id, v, "{}", str);
@@ -739,7 +746,7 @@ struct IRPrinter : IR::Visitor {
 
     auto visit(IR::Constant &v, IR::NodeID node_id) -> void override {
         auto *type_node = module->get_node(v.type_node_id);
-        auto &type = type_node->type_node;
+        auto &type = type_node->type;
         auto value_str = std::string{};
         switch (type.type_kind) {
             case IR::TypeKind::eVoid: {
@@ -769,7 +776,8 @@ struct IRPrinter : IR::Visitor {
             } break;
             case IR::TypeKind::eStruct: {
                 for (u32 field_index = 0; field_index < type.width; field_index++) {
-                    value_str += fmt::format("[field{}_type: %{}] ", field_index, type.field_type_node_ids[field_index]);
+                    auto &field = type.fields[field_index];
+                    value_str += fmt::format("[field {}: identifier = {}, type_node_id = %{}]", field_index, field.identifier, field.type_node_id);
                 }
             } break;
             case IR::TypeKind::ePointer: {
