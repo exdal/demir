@@ -83,19 +83,42 @@ auto Lexer::read_number(this Lexer &self) -> Token {
     auto start_pos = self.position();
     auto start_off = self.offset;
 
-    do {
+    auto is_floating_point = false;
+    while (is_digit(self.peek())) {
         self.consume();
-    } while (is_digit(self.peek()) || (self.peek() == '.' && is_digit(self.peek(1))));
+
+        auto has_dot = self.peek() == '.' && is_digit(self.peek(1));
+        if (has_dot) {
+            if (is_floating_point) {
+                throw LexerBadNumberError(Location(start_pos, self.position()));
+            }
+
+            self.consume();
+            is_floating_point = true;
+        }
+    }
 
     // TODO: Handle 1eX values
     auto number_str = std::string_view(self.buffer_view.data() + start_off, self.offset - start_off);
-    i64 number_value = 0;
-    auto r = std::from_chars(number_str.begin(), number_str.end(), number_value);
+    auto i64_value = 0_i64;
+    f64 f64_value = 0.0f;
+
+    auto r = std::from_chars_result{};
+    if (is_floating_point) {
+        r = std::from_chars(number_str.begin(), number_str.end(), f64_value);
+    } else {
+        r = std::from_chars(number_str.begin(), number_str.end(), i64_value);
+    }
+
     if (r.ptr != number_str.end() || r.ec != std::errc{}) {
         throw LexerBadNumberError(Location(start_pos, self.position()));
     }
 
-    return Token(TokenKind::eIntegerLiteral, Location(start_pos, self.position()), number_value);
+    if (is_floating_point) {
+        return Token(TokenKind::eFloatingPointLiteral, Location(start_pos, self.position()), f64_value);
+    } else {
+        return Token(TokenKind::eIntegerLiteral, Location(start_pos, self.position()), i64_value);
+    }
 }
 
 auto Lexer::read_line_comment(this Lexer &self) -> Token {

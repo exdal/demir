@@ -30,14 +30,15 @@ struct Token {
     };
 
     union {
-        u64 integer_value = ~0_u64;
-        f64 float_value;
+        i64 i64_value = ~0_i64;
+        f64 f64_value;
         StringValue string_value;
     };
 
     Token() = default;
     Token(TokenKind kind_, const Location &location_) : kind(kind_), location(location_) {}
-    Token(TokenKind kind_, const Location &location_, u64 decimal_value_) : kind(kind_), location(location_), integer_value(decimal_value_) {}
+    Token(TokenKind kind_, const Location &location_, i64 i64_value_) : kind(kind_), location(location_), i64_value(i64_value_) {}
+    Token(TokenKind kind_, const Location &location_, f64 f64_value_) : kind(kind_), location(location_), f64_value(f64_value_) {}
     Token(TokenKind kind_, const Location &location_, u32 string_offset_, u32 string_length_) :
         kind(kind_),
         location(location_),

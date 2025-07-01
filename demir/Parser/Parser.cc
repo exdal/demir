@@ -762,7 +762,8 @@ auto Parser::parse_prefix_expression(this Parser &self) -> AST::NodeID {
         case TokenKind::eTrue:
         case TokenKind::eFalse:
         case TokenKind::eStringLiteral:
-        case TokenKind::eIntegerLiteral: {
+        case TokenKind::eIntegerLiteral:
+        case TokenKind::eFloatingPointLiteral: {
             expression_id = self.parse_const_value_expression();
         } break;
         case TokenKind::eExclaim:
@@ -851,11 +852,11 @@ auto Parser::parse_const_value_expression(this Parser &self) -> AST::NodeID {
         } break;
         case TokenKind::eIntegerLiteral: {
             expr_value.kind = ValueKind::ei32;
-            expr_value.u64_val = token.integer_value;
+            expr_value.i64_val = token.i64_value;
         } break;
         case TokenKind::eFloatingPointLiteral: {
             expr_value.kind = ValueKind::ef32;
-            expr_value.f64_val = token.float_value;
+            expr_value.f64_val = token.f64_value;
         } break;
         default: {
             throw ParserUnexpectedTokenError(token.location);
