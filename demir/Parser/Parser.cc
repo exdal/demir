@@ -495,11 +495,17 @@ auto Parser::parse_function_decl_statement(this Parser &self, std::vector<Attrib
             self.expect(self.next(), TokenKind::eComma);
         }
 
+        auto param_attributes = Span<Attribute>();
+        if (self.peek().is(TokenKind::eHash)) {
+            auto parsed_attributes = self.parse_attributes();
+            param_attributes = self.allocator->copy_into(Span(param_attributes));
+        }
+
         auto param_identifier = self.parse_identifier();
         self.expect(self.next(), TokenKind::eColon);
         auto param_type_identifier = self.parse_identifier();
 
-        params.push_back({ .identifier = param_identifier, .type_identifier = param_type_identifier });
+        params.push_back({ .attributes = param_attributes, .identifier = param_identifier, .type_identifier = param_type_identifier });
         first_param = false;
     }
 

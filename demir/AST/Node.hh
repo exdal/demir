@@ -161,6 +161,7 @@ struct DeclareVarStatement {
 
 struct DeclareFunctionStatement {
     struct Parameter {
+        Span<Attribute> attributes = {};
         std::string_view identifier = {};
         std::string_view type_identifier = {};
     };
