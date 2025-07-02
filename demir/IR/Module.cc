@@ -673,6 +673,9 @@ auto ModuleBuilder::lower_type(this ModuleBuilder &self, const Type &type) -> No
             case TypeKind::eString: {
                 // TODO: Strings
             } break;
+            case TypeKind::eVector: {
+                // TODO: vectors
+            } break;
         }
 
         if (is_same) {

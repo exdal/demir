@@ -134,6 +134,8 @@ auto type_kind_to_str(TypeKind type_kind) -> std::string_view {
             return "struct";
         case TypeKind::ePointer:
             return "pointer";
+        case TypeKind::eVector:
+            return "vector";
     }
 }
 
@@ -735,6 +737,9 @@ struct IRPrinter : IR::Visitor {
             case TypeKind::ePointer: {
                 print(node_id, v, "[kind: {}] [type: %{}]", type_kind_str, v.pointer_type_node_id);
             } break;
+            case TypeKind::eVector: {
+                print(node_id, v, "[kind: {}] [element_count: {}] [element_type: %{}]", type_kind_str, v.element_count, v.pointer_type_node_id);
+            } break;
             case TypeKind::eString:
                 break;
         }
@@ -791,6 +796,9 @@ struct IRPrinter : IR::Visitor {
             } break;
             case TypeKind::ePointer: {
                 value_str = fmt::format("[pointer_type: %{}]", type.pointer_type_node_id);
+            } break;
+            case TypeKind::eVector: {
+                value_str = fmt::format("[element_count: {}] [element_type: %{}]", type.element_count, type.pointer_type_node_id);
             } break;
         }
 

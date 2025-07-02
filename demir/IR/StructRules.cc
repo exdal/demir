@@ -26,6 +26,7 @@ constexpr auto get_type_kind_size(TypeKind type_kind) -> u32 {
             return 8;
         case TypeKind::eStruct:
         case TypeKind::ePointer:
+        case TypeKind::eVector:
             // TODO: Member structs
             return 0;
     }
@@ -51,6 +52,7 @@ constexpr auto get_type_kind_alignment(TypeKind type_kind) -> u32 {
             return 8;
         case TypeKind::eStruct:
         case TypeKind::ePointer:
+        case TypeKind::eVector:
             // TODO: Member structs
             return 0;
     }
