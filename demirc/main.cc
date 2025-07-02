@@ -559,6 +559,13 @@ struct PrinterVisitor : AST::Visitor {
         pop();
         pop();
     }
+
+    auto visit(AST::DeclareTypeStatement &v) -> void override {
+        print_indented("Declare type statement:");
+        push();
+        print_indented("Identifier: {}", v.identifier);
+        pop();
+    }
 };
 
 template<typename T>

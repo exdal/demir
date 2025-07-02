@@ -94,6 +94,7 @@ struct ModuleBuilder : AST::StatementVisitor {
     auto lower_break_statement(this ModuleBuilder &, AST::BreakStatement &statement) -> NodeID;
     auto lower_continue_statement(this ModuleBuilder &, AST::ContinueStatement &statement) -> NodeID;
     auto lower_decl_struct_statement(this ModuleBuilder &, AST::DeclareStructStatement &statement) -> NodeID;
+    auto lower_decl_type_statement(this ModuleBuilder &, AST::DeclareTypeStatement &statement) -> NodeID;
 
     //  ── AST VISITOR ─────────────────────────────────────────────────────
     auto visit(AST::MultiStatement &) -> void override;
@@ -107,6 +108,7 @@ struct ModuleBuilder : AST::StatementVisitor {
     auto visit(AST::BreakStatement &) -> void override;
     auto visit(AST::ContinueStatement &) -> void override;
     auto visit(AST::DeclareStructStatement &) -> void override;
+    auto visit(AST::DeclareTypeStatement &) -> void override;
 };
 
 struct Module {

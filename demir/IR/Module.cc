@@ -1,5 +1,4 @@
 #include "demir/IR/Module.hh"
-#include "demir/Core/FNV.hh"
 #include "demir/IR/StructRules.hh"
 
 #include <algorithm>
@@ -7,36 +6,6 @@
 #include <utility>
 
 namespace demir::IR {
-constexpr auto type_identifier_to_builtin_type(std::string_view type_identifier) -> TypeKind {
-    switch (fnv64(type_identifier)) {
-        case fnv64_c("bool"):
-            return TypeKind::eBool;
-        case fnv64_c("i8"):
-            return TypeKind::ei8;
-        case fnv64_c("u8"):
-            return TypeKind::eu8;
-        case fnv64_c("i16"):
-            return TypeKind::ei16;
-        case fnv64_c("u16"):
-            return TypeKind::eu16;
-        case fnv64_c("i32"):
-            return TypeKind::ei32;
-        case fnv64_c("u32"):
-            return TypeKind::eu32;
-        case fnv64_c("i64"):
-            return TypeKind::ei64;
-        case fnv64_c("u64"):
-            return TypeKind::eu64;
-        case fnv64_c("f32"):
-            return TypeKind::ef32;
-        case fnv64_c("f64"):
-            return TypeKind::ef64;
-        default:;
-    }
-
-    return TypeKind::eVoid;
-}
-
 //  ── BASIC BLOCK BUILDER ─────────────────────────────────────────────
 
 auto BasicBlockBuilder::get_underlying(this BasicBlockBuilder &self) -> BasicBlock & {
@@ -425,6 +394,9 @@ auto ModuleBuilder::build(this ModuleBuilder &self, Span<AST::NodeID> global_ast
             case AST::NodeKind::eDeclareStructStatement: {
                 self.lower_decl_struct_statement(node->decl_struct_statement);
             } break;
+            case AST::NodeKind::eDeclareTypeStatement: {
+                self.lower_decl_type_statement(node->decl_type_statement);
+            } break;
             case AST::NodeKind::eDeclareFunctionStatement: {
                 global_ir_node_ids.push_back(self.reserve_function(node->decl_function_statement.identifier));
             } break;
@@ -618,11 +590,6 @@ auto ModuleBuilder::decorate_struct_member(
 }
 
 auto ModuleBuilder::lower_type(this ModuleBuilder &self, std::string_view type_identifier) -> NodeID {
-    auto builtin_type_kind = type_identifier_to_builtin_type(type_identifier);
-    if (builtin_type_kind != TypeKind::eVoid) {
-        return self.lower_type(builtin_type_kind);
-    }
-
     return self.lookup_identifier(type_identifier);
 }
 
@@ -1116,12 +1083,45 @@ auto ModuleBuilder::lower_decl_struct_statement(this ModuleBuilder &self, AST::D
 
     auto struct_layout = StructLayout(struct_layout_kind);
     for (const auto &[field, member_index] : std::views::zip(statement.fields, std::views::iota(0_sz))) {
-        auto field_type_kind = type_identifier_to_builtin_type(field.type_identifier);
-        auto field_offset = struct_layout.add_field(field_type_kind);
+        auto field_type_node_id = self.lower_type(field.type_identifier);
+        auto *field_type_node = self.get_node(field_type_node_id);
+        auto &field_type = field_type_node->type;
+        auto field_offset = struct_layout.add_field(field_type.type_kind);
+
         self.decorate_struct_member(struct_node_id, member_index, DecorationKind::eOffset, DecorationOperand{ .byte_offset = field_offset });
     }
 
     return struct_node_id;
+}
+
+auto ModuleBuilder::lower_decl_type_statement(this ModuleBuilder &self, AST::DeclareTypeStatement &statement) -> NodeID {
+    if (statement.type_expression_id != AST::NodeID::Invalid) {
+        // TODO: properly support this
+        DEMIR_DEBUGBREAK();
+
+        // FIXME: This is also wrong because in global scope, we should not create blocks
+        //
+        // auto block_builder = self.acquire_block_builder();
+        // block_builder.lower_expression(statement.type_expression_id);
+        // self.release_block_builder(std::move(block_builder));
+    }
+
+    auto intrinsic_type_kind = Option<TypeKind>();
+    for (auto &attribute : statement.attributes) {
+        if (attribute.kind == AttributeKind::eIntrinsicType) {
+            intrinsic_type_kind.emplace(attribute.intrinsic_type_kind);
+            break;
+        }
+    }
+
+    auto type_node_id = NodeID::Invalid;
+    if (intrinsic_type_kind) {
+        type_node_id = self.lower_type(intrinsic_type_kind.value());
+    }
+
+    self.symbols.add_symbol(statement.identifier, type_node_id);
+
+    return type_node_id;
 }
 
 auto ModuleBuilder::visit(AST::MultiStatement &statement) -> void {
@@ -1170,6 +1170,10 @@ auto ModuleBuilder::visit(AST::DeclareStructStatement &statement) -> void {
     this->lower_decl_struct_statement(statement);
 }
 
+auto ModuleBuilder::visit(AST::DeclareTypeStatement &statement) -> void {
+    this->lower_decl_type_statement(statement);
+}
+
 //  ── MODULE ──────────────────────────────────────────────────────────
 
 auto Module::get_node(this Module &self, NodeID node_id) -> Node * {
@@ -1194,6 +1198,7 @@ auto lower_ast_module(BumpAllocator *allocator, AST::Module *ast_module) -> std:
                 }
             } break;
             case AST::NodeKind::eDeclareVarStatement:
+            case AST::NodeKind::eDeclareTypeStatement:
             case AST::NodeKind::eDeclareStructStatement: {
                 global_ast_node_ids.push_back(node_id);
             } break;
