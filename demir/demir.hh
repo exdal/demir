@@ -106,6 +106,25 @@ enum class LayoutKind : u32 {
     eStd430,
 };
 
+enum class TypeKind : u32 {
+    eVoid = 0,
+    eBool,
+    ei8,
+    eu8,
+    ei16,
+    eu16,
+    ei32,
+    eu32,
+    ei64,
+    eu64,
+    ef32,
+    ef64,
+    eStruct,
+    ePointer,
+    eVector,
+    eString,
+};
+
 struct Attribute {
     AttributeKind kind = AttributeKind::eNone;
     Location location = {};
@@ -114,6 +133,7 @@ struct Attribute {
         BuiltinKind builtin_kind;
         // TODO: Threads
         LayoutKind layout_kind;
+        TypeKind intrinsic_type_kind;
     };
 };
 
@@ -136,24 +156,6 @@ enum class DecorationKind : u32 {
     eBinding,
     eDescriptorSet,
     eOffset,
-};
-
-enum class TypeKind : u32 {
-    eVoid = 0,
-    eBool,
-    ei8,
-    eu8,
-    ei16,
-    eu16,
-    ei32,
-    eu32,
-    ei64,
-    eu64,
-    ef32,
-    ef64,
-    eStruct,
-    ePointer,
-    eString,
 };
 
 struct Value {

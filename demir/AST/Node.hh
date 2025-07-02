@@ -47,6 +47,7 @@ enum class NodeKind : u32 {
     eBreakStatement,
     eContinueStatement,
     eDeclareStructStatement,
+    eDeclareTypeStatement,
 };
 
 enum class NodeID : u32 { Invalid = ~0_u32 };
@@ -240,6 +241,14 @@ struct DeclareStructStatement {
     Span<Field> fields = {};
 };
 
+struct DeclareTypeStatement {
+    NodeKind kind = NodeKind::eDeclareTypeStatement;
+    
+    NodeID type_expression_id = NodeID::Invalid;
+    Span<Attribute> attributes = {};
+    std::string_view identifier = {};
+};
+
 union Node {
     NodeKind kind = NodeKind::eNone;
 
@@ -264,5 +273,6 @@ union Node {
     BreakStatement break_statement;
     ContinueStatement continue_statement;
     DeclareStructStatement decl_struct_statement;
+    DeclareTypeStatement decl_type_statement;
 };
 } // namespace demir::AST

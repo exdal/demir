@@ -34,6 +34,7 @@ KEYWORD(Break, "break")
 KEYWORD(Continue, "continue")
 KEYWORD(Match, "match")
 KEYWORD(Struct, "struct")
+KEYWORD(Type, "type")
 
 PUNCTUATOR(Equal, "=")
 PUNCTUATOR(Add, "+")

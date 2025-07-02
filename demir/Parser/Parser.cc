@@ -191,6 +191,42 @@ auto str_to_layout_kind(std::string_view str) -> Option<LayoutKind> {
     return nullopt;
 }
 
+constexpr auto type_identifier_to_type_kind(std::string_view type_identifier) -> TypeKind {
+    switch (fnv64(type_identifier)) {
+        case fnv64_c("bool"):
+            return TypeKind::eBool;
+        case fnv64_c("i8"):
+            return TypeKind::ei8;
+        case fnv64_c("u8"):
+            return TypeKind::eu8;
+        case fnv64_c("i16"):
+            return TypeKind::ei16;
+        case fnv64_c("u16"):
+            return TypeKind::eu16;
+        case fnv64_c("i32"):
+            return TypeKind::ei32;
+        case fnv64_c("u32"):
+            return TypeKind::eu32;
+        case fnv64_c("i64"):
+            return TypeKind::ei64;
+        case fnv64_c("u64"):
+            return TypeKind::eu64;
+        case fnv64_c("f32"):
+            return TypeKind::ef32;
+        case fnv64_c("f64"):
+            return TypeKind::ef64;
+        case fnv64_c("struct"):
+            return TypeKind::eStruct;
+        case fnv64_c("pointer"):
+            return TypeKind::ePointer;
+        case fnv64_c("vector"):
+            return TypeKind::eVector;
+        default:;
+    }
+
+    return TypeKind::eVoid;
+}
+
 auto Parser::parse(BumpAllocator *allocator, std::string_view source) -> ParserResult {
     auto tokens = Lexer::tokenize(source);
     auto parser = Parser{};
@@ -347,6 +383,19 @@ auto Parser::parse_attributes(this Parser &self) -> std::vector<Attribute> {
                 };
                 attributes.push_back(attribute);
             } break;
+            case fnv64_c("intrinsic_type"): {
+                self.expect(self.next(), TokenKind::eParenLeft);
+                const auto &string_token = self.expect(self.next(), TokenKind::eStringLiteral);
+                auto type_kind_str = string_token.string(self.source);
+                auto type_kind = type_identifier_to_type_kind(type_kind_str);
+                auto attribute = Attribute{
+                    .kind = AttributeKind::eIntrinsicType,
+                    .location = attrib_loc,
+                    .intrinsic_type_kind = type_kind,
+                };
+                attributes.push_back(attribute);
+                self.expect(self.next(), TokenKind::eParenRight);
+            } break;
             default: {
                 throw ParserUnexpectedAttributeError(attrib_loc);
             }
@@ -440,6 +489,9 @@ auto Parser::parse_single_statement(this Parser &self) -> AST::NodeID {
             case TokenKind::eHash: {
                 attributes = self.parse_attributes();
                 continue;
+            }
+            case TokenKind::eType: {
+                return self.parse_type_decl_statement(std::move(attributes));
             }
             default: {
                 throw ParserUnexpectedTokenError(token.location);
@@ -693,6 +745,29 @@ auto Parser::parse_struct_decl_statement(this Parser &self, std::vector<Attribut
     };
 
     return self.make_node({ .decl_struct_statement = decl_struct_statement });
+}
+
+auto Parser::parse_type_decl_statement(this Parser &self, std::vector<Attribute> &&attributes) -> AST::NodeID {
+    self.expect(self.next(), TokenKind::eType);
+    auto identifier_str = self.parse_identifier();
+    auto type_expression_id = AST::NodeID::Invalid;
+
+    // Check if its actually a valid type definition and not phony (used for intrinsic types)
+    if (self.peek().is(TokenKind::eEqual)) {
+        self.next();
+
+        type_expression_id = self.parse_expression();
+    }
+
+    self.expect(self.next(), TokenKind::eSemiColon);
+
+    auto decl_type_statement = AST::DeclareTypeStatement{
+        .type_expression_id = type_expression_id,
+        .attributes = self.allocator->copy_into(Span(attributes)),
+        .identifier = identifier_str,
+    };
+
+    return self.make_node({ .decl_type_statement = decl_type_statement });
 }
 
 auto Parser::parse_expression(this Parser &self, AST::Precedence precedence) -> AST::NodeID {
