@@ -10,7 +10,7 @@ struct StructLayout {
 
     StructLayout(LayoutKind layout_kind_) : layout_kind(layout_kind_) {};
 
-    auto add_field(this StructLayout &, ValueKind value_kind) -> u32;
+    auto add_field(this StructLayout &, TypeKind type_kind) -> u32;
 
     auto get_aligned_size(this StructLayout &) -> u32;
 };

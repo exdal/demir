@@ -102,34 +102,38 @@ auto assignment_to_str(AST::AssignmentType type) -> std::string_view {
     return "???";
 }
 
-auto expression_value_kind_to_str(ValueKind value_kind) -> std::string_view {
-    switch (value_kind) {
-        case ValueKind::eBool:
+auto type_kind_to_str(TypeKind type_kind) -> std::string_view {
+    switch (type_kind) {
+        case TypeKind::eBool:
             return "bool";
-        case ValueKind::ei8:
+        case TypeKind::ei8:
             return "i8";
-        case ValueKind::eu8:
+        case TypeKind::eu8:
             return "u8";
-        case ValueKind::ei16:
+        case TypeKind::ei16:
             return "i16";
-        case ValueKind::eu16:
+        case TypeKind::eu16:
             return "u16";
-        case ValueKind::ei32:
+        case TypeKind::ei32:
             return "i32";
-        case ValueKind::eu32:
+        case TypeKind::eu32:
             return "u32";
-        case ValueKind::ei64:
+        case TypeKind::ei64:
             return "i64";
-        case ValueKind::eu64:
+        case TypeKind::eu64:
             return "u64";
-        case ValueKind::ef32:
+        case TypeKind::ef32:
             return "f32";
-        case ValueKind::ef64:
+        case TypeKind::ef64:
             return "f64";
-        case ValueKind::eString:
+        case TypeKind::eString:
             return "string";
-        default:
-            return "i32 (implicitly)";
+        case TypeKind::eVoid:
+            return "void";
+        case TypeKind::eStruct:
+            return "struct";
+        case TypeKind::ePointer:
+            return "pointer";
     }
 }
 
@@ -203,23 +207,6 @@ auto instruction_kind_to_str(IR::NodeKind kind) -> std::string_view {
             return "OpLogicalNot";
         case IR::NodeKind::eAccessChain:
             return "OpAccessChain";
-    }
-}
-
-auto instruction_type_kind_to_str(IR::TypeKind kind) -> std::string_view {
-    switch (kind) {
-        case IR::TypeKind::eVoid:
-            return "void";
-        case IR::TypeKind::eBool:
-            return "bool";
-        case IR::TypeKind::eInt:
-            return "int";
-        case IR::TypeKind::eFloat:
-            return "float";
-        case IR::TypeKind::eStruct:
-            return "struct";
-        case IR::TypeKind::ePointer:
-            return "pointer";
     }
 }
 
@@ -339,25 +326,25 @@ struct PrinterVisitor : AST::Visitor {
     auto visit(AST::ConstantValueExpression &v) -> void override {
         print_indented("Constant value expression:");
         push();
-        auto kind_str = expression_value_kind_to_str(v.value.kind);
-        switch (v.value.kind) {
-            case ValueKind::eBool: {
+        auto kind_str = type_kind_to_str(v.value.type_kind);
+        switch (v.value.type_kind) {
+            case TypeKind::eBool: {
                 print_indented("Value: {}", v.value.bool_val, kind_str);
             } break;
-            case ValueKind::ei8:
-            case ValueKind::ei16:
-            case ValueKind::ei32:
-            case ValueKind::ei64: {
+            case TypeKind::ei8:
+            case TypeKind::ei16:
+            case TypeKind::ei32:
+            case TypeKind::ei64: {
                 print_indented("Value: {}", v.value.i64_val, kind_str);
             } break;
-            case ValueKind::eu8:
-            case ValueKind::eu16:
-            case ValueKind::eu32:
-            case ValueKind::eu64: {
+            case TypeKind::eu8:
+            case TypeKind::eu16:
+            case TypeKind::eu32:
+            case TypeKind::eu64: {
                 print_indented("Value: {}", v.value.u64_val, kind_str);
             } break;
-            case ValueKind::ef32:
-            case ValueKind::ef64: {
+            case TypeKind::ef32:
+            case TypeKind::ef64: {
                 print_indented("Value: {}", v.value.f64_val, kind_str);
             } break;
             default: {
@@ -721,26 +708,35 @@ struct IRPrinter : IR::Visitor {
     }
 
     auto visit(IR::Type &v, IR::NodeID node_id) -> void override {
-        auto type_kind_str = instruction_type_kind_to_str(v.type_kind);
+        auto type_kind_str = type_kind_to_str(v.type_kind);
         switch (v.type_kind) {
-            case IR::TypeKind::eVoid:
-            case IR::TypeKind::eBool:
-            case IR::TypeKind::eInt:
-            case IR::TypeKind::eFloat: {
-                print(node_id, v, "[kind: {}] [width: {}] [signed: {}]", type_kind_str, v.width, v.is_signed);
+            case TypeKind::eVoid:
+            case TypeKind::eBool:
+            case TypeKind::ei8:
+            case TypeKind::eu8:
+            case TypeKind::ei16:
+            case TypeKind::eu16:
+            case TypeKind::ei32:
+            case TypeKind::eu32:
+            case TypeKind::ei64:
+            case TypeKind::eu64:
+            case TypeKind::ef32:
+            case TypeKind::ef64: {
+                print(node_id, v, "[kind: {}]", type_kind_str);
             } break;
-            case IR::TypeKind::eStruct: {
-                auto str = fmt::format("[kind: {}] [field_count: {}]", type_kind_str, v.width);
-                for (u32 field_index = 0; field_index < v.width; field_index++) {
-                    auto &field = v.fields[field_index];
+            case TypeKind::eStruct: {
+                auto str = fmt::format("[kind: {}] [field_count: {}]", type_kind_str, v.fields.size());
+                for (const auto &[field, field_index] : std::views::zip(v.fields, std::views::iota(0_u32))) {
                     str += fmt::format(" [field {}: identifier = {}, type_node_id = %{}]", field_index, field.identifier, field.type_node_id);
                 }
 
                 print(node_id, v, "{}", str);
             } break;
-            case IR::TypeKind::ePointer: {
+            case TypeKind::ePointer: {
                 print(node_id, v, "[kind: {}] [type: %{}]", type_kind_str, v.pointer_type_node_id);
             } break;
+            case TypeKind::eString:
+                break;
         }
     }
 
@@ -749,38 +745,51 @@ struct IRPrinter : IR::Visitor {
         auto &type = type_node->type;
         auto value_str = std::string{};
         switch (type.type_kind) {
-            case IR::TypeKind::eVoid: {
+            case TypeKind::eVoid: {
                 value_str = "void";
             } break;
-            case IR::TypeKind::eBool: {
+            case TypeKind::eBool: {
                 value_str = fmt::format("{}", v.bool_value);
             } break;
-            case IR::TypeKind::eInt: {
-                switch (type.width) {
-                    case 8: {
-                        value_str = std::to_string(type.is_signed ? v.i8_value : v.u8_value);
-                    } break;
-                    case 16: {
-                        value_str = std::to_string(type.is_signed ? v.i16_value : v.u16_value);
-                    } break;
-                    case 32: {
-                        value_str = std::to_string(type.is_signed ? v.i32_value : v.u32_value);
-                    } break;
-                    case 64: {
-                        value_str = std::to_string(type.is_signed ? v.i64_value : v.u64_value);
-                    } break;
-                    default:;
+            case TypeKind::ei8: {
+                value_str = fmt::format("{}", v.i8_value);
+            } break;
+            case TypeKind::eu8: {
+                value_str = fmt::format("{}", v.u8_value);
+            } break;
+            case TypeKind::ei16: {
+                value_str = fmt::format("{}", v.i16_value);
+            } break;
+            case TypeKind::eu16: {
+                value_str = fmt::format("{}", v.u16_value);
+            } break;
+            case TypeKind::ei32: {
+                value_str = fmt::format("{}", v.i32_value);
+            } break;
+            case TypeKind::eu32: {
+                value_str = fmt::format("{}", v.u32_value);
+            } break;
+            case TypeKind::ei64: {
+                value_str = fmt::format("{}", v.i64_value);
+            } break;
+            case TypeKind::eu64: {
+                value_str = fmt::format("{}", v.u64_value);
+            } break;
+            case TypeKind::ef32: {
+                value_str = fmt::format("{}", v.f32_value);
+            } break;
+            case TypeKind::ef64: {
+                value_str = fmt::format("{}", v.f64_value);
+            } break;
+            case TypeKind::eString: {
+                // TODO: Strings
+            } break;
+            case TypeKind::eStruct: {
+                for (const auto &[field, field_index] : std::views::zip(type.fields, std::views::iota(0_u32))) {
+                    value_str += fmt::format(" [field {}: identifier = {}, type_node_id = %{}]", field_index, field.identifier, field.type_node_id);
                 }
             } break;
-            case IR::TypeKind::eFloat: {
-            } break;
-            case IR::TypeKind::eStruct: {
-                for (u32 field_index = 0; field_index < type.width; field_index++) {
-                    auto &field = type.fields[field_index];
-                    value_str += fmt::format("[field {}: identifier = {}, type_node_id = %{}]", field_index, field.identifier, field.type_node_id);
-                }
-            } break;
-            case IR::TypeKind::ePointer: {
+            case TypeKind::ePointer: {
                 value_str = fmt::format("[pointer_type: %{}]", type.pointer_type_node_id);
             } break;
         }

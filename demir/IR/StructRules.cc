@@ -4,55 +4,63 @@
 #include "demir/demir.hh"
 
 namespace demir::IR {
-constexpr auto get_value_kind_size(ValueKind value_kind) -> u32 {
-    switch (value_kind) {
-        case ValueKind::eNone:
+constexpr auto get_type_kind_size(TypeKind type_kind) -> u32 {
+    switch (type_kind) {
+        case TypeKind::eVoid:
             return 0;
-        case ValueKind::eBool:
-        case ValueKind::ei8:
-        case ValueKind::eu8:
+        case TypeKind::eBool:
+        case TypeKind::ei8:
+        case TypeKind::eu8:
             return 1;
-        case ValueKind::ei16:
-        case ValueKind::eu16:
+        case TypeKind::ei16:
+        case TypeKind::eu16:
             return 2;
-        case ValueKind::ei32:
-        case ValueKind::eu32:
-        case ValueKind::ef32:
+        case TypeKind::ei32:
+        case TypeKind::eu32:
+        case TypeKind::ef32:
             return 4;
-        case ValueKind::ei64:
-        case ValueKind::eu64:
-        case ValueKind::ef64:
-        case ValueKind::eString:
+        case TypeKind::ei64:
+        case TypeKind::eu64:
+        case TypeKind::ef64:
+        case TypeKind::eString:
             return 8;
-    }
-}
-
-constexpr auto get_value_kind_alignment(ValueKind value_kind) -> u32 {
-    switch (value_kind) {
-        case ValueKind::eNone:
+        case TypeKind::eStruct:
+        case TypeKind::ePointer:
+            // TODO: Member structs
             return 0;
-        case ValueKind::eBool:
-        case ValueKind::ei8:
-        case ValueKind::eu8:
-        case ValueKind::ei16:
-        case ValueKind::eu16:
-        case ValueKind::ei32:
-        case ValueKind::eu32:
-        case ValueKind::ef32:
-            return 4;
-        case ValueKind::ei64:
-        case ValueKind::eu64:
-        case ValueKind::ef64:
-        case ValueKind::eString:
-            return 8;
     }
 }
 
-auto StructLayout::add_field(this StructLayout &self, ValueKind value_kind) -> u32 {
-    auto alignment = get_value_kind_alignment(value_kind);
+constexpr auto get_type_kind_alignment(TypeKind type_kind) -> u32 {
+    switch (type_kind) {
+        case TypeKind::eVoid:
+            return 0;
+        case TypeKind::eBool:
+        case TypeKind::ei8:
+        case TypeKind::eu8:
+        case TypeKind::ei16:
+        case TypeKind::eu16:
+        case TypeKind::ei32:
+        case TypeKind::eu32:
+        case TypeKind::ef32:
+            return 4;
+        case TypeKind::ei64:
+        case TypeKind::eu64:
+        case TypeKind::ef64:
+        case TypeKind::eString:
+            return 8;
+        case TypeKind::eStruct:
+        case TypeKind::ePointer:
+            // TODO: Member structs
+            return 0;
+    }
+}
+
+auto StructLayout::add_field(this StructLayout &self, TypeKind type_kind) -> u32 {
+    auto alignment = get_type_kind_alignment(type_kind);
     auto offset = align_up(self.size, alignment);
 
-    self.size = offset + get_value_kind_size(value_kind);
+    self.size = offset + get_type_kind_size(type_kind);
     self.max_alignment = max(self.max_alignment, alignment);
 
     return offset;

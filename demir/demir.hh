@@ -79,6 +79,7 @@ enum class AttributeKind : u32 {
     eThreads, // args: vec3u(x, y, z)
     eLayout, // args: "layout_kind"
     ePushConstants,
+    eIntrinsicType, // args: "type identifier"
 };
 
 enum class ShaderKind : u32 {
@@ -137,8 +138,8 @@ enum class DecorationKind : u32 {
     eOffset,
 };
 
-enum class ValueKind : u32 {
-    eNone = 0,
+enum class TypeKind : u32 {
+    eVoid = 0,
     eBool,
     ei8,
     eu8,
@@ -150,11 +151,13 @@ enum class ValueKind : u32 {
     eu64,
     ef32,
     ef64,
+    eStruct,
+    ePointer,
     eString,
 };
 
 struct Value {
-    ValueKind kind = ValueKind::eNone;
+    TypeKind type_kind = TypeKind::eVoid;
     u32 element_count = 1;
     union {
         u64 u64_val = 0;

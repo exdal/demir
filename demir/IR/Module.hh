@@ -79,7 +79,7 @@ struct ModuleBuilder : AST::StatementVisitor {
 
     auto lower_type(this ModuleBuilder &, std::string_view type_identifier) -> NodeID;
     auto lower_type(this ModuleBuilder &, const Type &type) -> NodeID;
-    auto lower_type(this ModuleBuilder &, ValueKind value_kind) -> NodeID;
+    auto lower_type(this ModuleBuilder &, TypeKind type_kind) -> NodeID;
     auto lower_constant(this ModuleBuilder &, const Constant &constant) -> NodeID;
     auto lower_variable(this ModuleBuilder &, std::string_view identifier, std::string_view type_identifier, NodeID initializer_node_id) -> NodeID;
     auto lower_variable(this ModuleBuilder &, std::string_view identifier, NodeID type_node_id, NodeID initializer_node_id) -> NodeID;

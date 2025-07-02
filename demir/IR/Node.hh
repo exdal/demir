@@ -255,15 +255,6 @@ struct FunctionCallInstruction {
     Span<NodeID> param_node_ids = {};
 };
 
-enum class TypeKind : u32 {
-    eVoid = 0,
-    eBool,
-    eInt,
-    eFloat,
-    eStruct,
-    ePointer,
-};
-
 struct Type {
     struct StructField {
         std::string_view identifier = {};
@@ -273,12 +264,9 @@ struct Type {
     NodeKind kind = NodeKind::eType;
 
     TypeKind type_kind = TypeKind::eVoid;
-    u32 width = 0;
-    union {
-        bool is_signed = false;
-        StructField *fields;
-        NodeID pointer_type_node_id;
-    };
+    u32 element_count = 0;
+    NodeID pointer_type_node_id = NodeID::Invalid;
+    Span<StructField> fields = {};
 };
 
 struct Constant {
@@ -294,6 +282,7 @@ struct Constant {
         i16 i16_value;
         u8 u8_value;
         i8 i8_value;
+        f32 f32_value;
         f64 f64_value;
         bool bool_value;
     };

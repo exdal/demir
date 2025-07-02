@@ -136,6 +136,8 @@ auto attribute_kind_to_string(AttributeKind kind) -> std::string_view {
             return "layout";
         case AttributeKind::ePushConstants:
             return "push_constants";
+        case AttributeKind::eIntrinsicType:
+            return "intrinsic_type";
     }
 }
 
@@ -836,26 +838,26 @@ auto Parser::parse_const_value_expression(this Parser &self) -> AST::NodeID {
     auto expr_value = Value{};
     switch (token.kind) {
         case TokenKind::eTrue: {
-            expr_value.kind = ValueKind::eBool;
+            expr_value.type_kind = TypeKind::eBool;
             expr_value.bool_val = true;
         } break;
         case TokenKind::eFalse: {
-            expr_value.kind = ValueKind::eBool;
+            expr_value.type_kind = TypeKind::eBool;
             expr_value.bool_val = false;
         } break;
         case TokenKind::eStringLiteral: {
             auto token_str = token.string(self.source);
             auto expr_str = self.allocator->alloc_str(token_str);
-            expr_value.kind = ValueKind::eString;
+            expr_value.type_kind = TypeKind::eString;
             expr_value.element_count = token.string_value.length;
             expr_value.str_val = expr_str.data();
         } break;
         case TokenKind::eIntegerLiteral: {
-            expr_value.kind = ValueKind::ei32;
+            expr_value.type_kind = TypeKind::ei32;
             expr_value.i64_val = token.i64_value;
         } break;
         case TokenKind::eFloatingPointLiteral: {
-            expr_value.kind = ValueKind::ef32;
+            expr_value.type_kind = TypeKind::ef32;
             expr_value.f64_val = token.f64_value;
         } break;
         default: {
