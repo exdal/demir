@@ -21,6 +21,7 @@ struct Visitor {
     virtual auto visit(LoadInstruction &, NodeID) -> void = 0;
     virtual auto visit(StoreInstruction &, NodeID) -> void = 0;
     virtual auto visit(AccessChainInstruction &, NodeID) -> void = 0;
+    virtual auto visit(VectorShuffleInstruction &, NodeID) -> void = 0;
     virtual auto visit(AddInstruction &, NodeID) -> void = 0;
     virtual auto visit(SubInstruction &, NodeID) -> void = 0;
     virtual auto visit(MulInstruction &, NodeID) -> void = 0;

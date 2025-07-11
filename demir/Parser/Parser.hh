@@ -56,5 +56,6 @@ private:
     auto parse_unary_expression(this Parser &) -> AST::NodeID;
     auto parse_access_field_expression(this Parser &, AST::NodeID lhs_expression_id) -> AST::NodeID;
     auto parse_call_function_expression(this Parser &, AST::NodeID lhs_expression_id) -> AST::NodeID;
+    auto parse_tuple_expression(this Parser &) -> AST::NodeID;
 };
 } // namespace demir

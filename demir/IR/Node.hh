@@ -23,6 +23,9 @@ enum class NodeKind : u32 {
     eStore,
     eAccessChain,
 
+    // Composite instructions
+    eVectorShuffle,
+
     // Arithmatic instructions
     eAdd,
     eSub,
@@ -136,6 +139,15 @@ struct AccessChainInstruction {
     NodeID type_node_id = NodeID::Invalid;
     NodeID base_node_id = NodeID::Invalid;
     NodeID index_node_id = NodeID::Invalid;
+};
+
+struct VectorShuffleInstruction {
+    NodeKind kind = NodeKind::eVectorShuffle;
+
+    NodeID type_node_id = NodeID::Invalid;
+    NodeID vector_1_node_id = NodeID::Invalid;
+    NodeID vector_2_node_id = NodeID::Invalid;
+    std::array<u8, 4> shuffle_indices = {};
 };
 
 struct AddInstruction {
@@ -256,7 +268,7 @@ struct FunctionCallInstruction {
 };
 
 struct Type {
-    struct StructField {
+    struct Field {
         std::string_view identifier = {};
         NodeID type_node_id = NodeID::Invalid;
     };
@@ -266,7 +278,7 @@ struct Type {
     TypeKind type_kind = TypeKind::eVoid;
     u32 element_count = 0;
     NodeID pointer_type_node_id = NodeID::Invalid;
-    Span<StructField> fields = {};
+    Span<Field> fields = {};
 };
 
 struct Constant {
@@ -359,6 +371,7 @@ union Node {
     LoadInstruction load_instr;
     StoreInstruction store_instr;
     AccessChainInstruction access_chain_instr;
+    VectorShuffleInstruction vector_shuffle_instr;
     AddInstruction add_instr;
     SubInstruction sub_instr;
     MulInstruction mul_instr;

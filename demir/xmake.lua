@@ -38,6 +38,7 @@ target("demir")
     add_packages(
         "fmt",
         "unordered_dense",
+        "svector",
         {public = true})
 
 target_end()

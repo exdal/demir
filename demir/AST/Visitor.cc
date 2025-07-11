@@ -30,6 +30,9 @@ auto Visitor::visit(NodeID node_id) -> void {
         case NodeKind::eAccessFieldExpression: {
             visit(node->access_field_expression);
         } break;
+        case NodeKind::eTupleExpression: {
+            visit(node->tuple_expression);
+        } break;
         case NodeKind::eCallFunctionExpression: {
             visit(node->call_function_expression);
         } break;
@@ -125,6 +128,7 @@ auto StatementVisitor::visit(NodeID node_id) -> void {
         case NodeKind::eUnaryExpression:
         case NodeKind::eAccessFieldExpression:
         case NodeKind::eCallFunctionExpression:
+        case NodeKind::eTupleExpression:
         case NodeKind::eNone:;
     }
 }

@@ -136,8 +136,6 @@ auto attribute_kind_to_string(AttributeKind kind) -> std::string_view {
             return "layout";
         case AttributeKind::ePushConstants:
             return "push_constants";
-        case AttributeKind::eIntrinsicType:
-            return "intrinsic_type";
     }
 }
 
@@ -383,19 +381,6 @@ auto Parser::parse_attributes(this Parser &self) -> std::vector<Attribute> {
                 };
                 attributes.push_back(attribute);
             } break;
-            case fnv64_c("intrinsic_type"): {
-                self.expect(self.next(), TokenKind::eParenLeft);
-                const auto &string_token = self.expect(self.next(), TokenKind::eStringLiteral);
-                auto type_kind_str = string_token.string(self.source);
-                auto type_kind = type_identifier_to_type_kind(type_kind_str);
-                auto attribute = Attribute{
-                    .kind = AttributeKind::eIntrinsicType,
-                    .location = attrib_loc,
-                    .intrinsic_type_kind = type_kind,
-                };
-                attributes.push_back(attribute);
-                self.expect(self.next(), TokenKind::eParenRight);
-            } break;
             default: {
                 throw ParserUnexpectedAttributeError(attrib_loc);
             }
@@ -472,7 +457,7 @@ auto Parser::parse_single_statement(this Parser &self) -> AST::NodeID {
                 return self.parse_multiway_branch_statement();
             }
             case TokenKind::eStruct: {
-                return self.parse_struct_decl_statement();
+                return self.parse_struct_decl_statement(std::move(attributes));
             }
             case TokenKind::eBreak: {
                 self.next();
@@ -487,7 +472,7 @@ auto Parser::parse_single_statement(this Parser &self) -> AST::NodeID {
                 return self.make_node({ .continue_statement = {} });
             }
             case TokenKind::eHash: {
-                attributes = self.parse_attributes();
+                std::ranges::move(self.parse_attributes(), std::back_inserter(attributes));
                 continue;
             }
             case TokenKind::eType: {
@@ -565,11 +550,11 @@ auto Parser::parse_function_decl_statement(this Parser &self, std::vector<Attrib
 
     self.expect(self.next(), TokenKind::eParenRight);
 
-    auto return_type_identifier = std::string_view{};
+    auto return_type_expression_id = AST::NodeID::Invalid;
     if (self.peek().is(TokenKind::eArrow)) {
         self.next();
 
-        return_type_identifier = self.parse_identifier();
+        return_type_expression_id = self.parse_expression();
     }
 
     auto body_statement = self.parse_statement();
@@ -578,7 +563,7 @@ auto Parser::parse_function_decl_statement(this Parser &self, std::vector<Attrib
         .attributes = self.allocator->copy_into(Span(attributes)),
         .identifier = identifier_str,
         .parameters = self.allocator->copy_into(Span(params)),
-        .return_type_identifier = return_type_identifier,
+        .return_type_expression_id = return_type_expression_id,
         .body_statement_id = body_statement,
     };
 
@@ -756,7 +741,11 @@ auto Parser::parse_type_decl_statement(this Parser &self, std::vector<Attribute>
     if (self.peek().is(TokenKind::eEqual)) {
         self.next();
 
-        type_expression_id = self.parse_expression();
+        if (self.peek().is(TokenKind::eParenLeft)) {
+            type_expression_id = self.parse_tuple_expression();
+        } else {
+            type_expression_id = self.parse_expression();
+        }
     }
 
     self.expect(self.next(), TokenKind::eSemiColon);
@@ -850,9 +839,7 @@ auto Parser::parse_prefix_expression(this Parser &self) -> AST::NodeID {
             expression_id = self.parse_unary_expression();
         } break;
         case TokenKind::eParenLeft: {
-            self.expect(self.next(), TokenKind::eParenLeft);
-            expression_id = self.parse_expression();
-            self.expect(self.next(), TokenKind::eParenRight);
+            expression_id = self.parse_tuple_expression();
         } break;
         default: {
             throw ParserUnexpectedTokenError(token.location);
@@ -1001,6 +988,18 @@ auto Parser::parse_call_function_expression(this Parser &self, AST::NodeID lhs_e
     };
 
     return self.make_node({ .call_function_expression = call_function_expression });
+}
+
+auto Parser::parse_tuple_expression(this Parser &self) -> AST::NodeID {
+    self.expect(self.next(), TokenKind::eParenLeft);
+    auto expressions = self.parse_expression_list(TokenKind::eParenRight);
+    self.expect(self.next(), TokenKind::eParenRight);
+
+    auto tuple_expression = AST::TupleExpression{
+        .expression_ids = self.allocator->copy_into(Span(expressions)),
+    };
+
+    return self.make_node({ .tuple_expression = tuple_expression });
 }
 
 } // namespace demir

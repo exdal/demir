@@ -34,6 +34,7 @@ enum class NodeKind : u32 {
     eUnaryExpression,
     eAccessFieldExpression,
     eCallFunctionExpression,
+    eTupleExpression,
 
     // Statements
     eMultiStatement,
@@ -144,6 +145,12 @@ struct CallFunctionExpression {
     Span<NodeID> parameter_expression_ids = {};
 };
 
+struct TupleExpression {
+    NodeKind kind = NodeKind::eTupleExpression;
+
+    Span<NodeID> expression_ids = {};
+};
+
 // Statements
 struct MultiStatement {
     NodeKind kind = NodeKind::eMultiStatement;
@@ -172,7 +179,7 @@ struct DeclareFunctionStatement {
     Span<Attribute> attributes = {};
     std::string_view identifier = {};
     Span<Parameter> parameters = {};
-    std::string_view return_type_identifier = {};
+    NodeID return_type_expression_id = NodeID::Invalid;
     NodeID body_statement_id = NodeID::Invalid;
 };
 
@@ -243,7 +250,7 @@ struct DeclareStructStatement {
 
 struct DeclareTypeStatement {
     NodeKind kind = NodeKind::eDeclareTypeStatement;
-    
+
     NodeID type_expression_id = NodeID::Invalid;
     Span<Attribute> attributes = {};
     std::string_view identifier = {};
@@ -260,6 +267,7 @@ union Node {
     UnaryExpression unary_expression;
     AccessFieldExpression access_field_expression;
     CallFunctionExpression call_function_expression;
+    TupleExpression tuple_expression;
 
     // Statements
     MultiStatement multi_statement;

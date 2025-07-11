@@ -5,7 +5,33 @@
 #include <ranges>
 #include <utility>
 
+#include <ankerl/svector.h>
+
 namespace demir::IR {
+auto map_vector_component(c8 component) -> i8 {
+    switch (component) {
+        case 'x':
+        case 'r': {
+            return 0;
+        } break;
+        case 'y':
+        case 'g': {
+            return 1;
+        } break;
+        case 'z':
+        case 'b': {
+            return 2;
+        } break;
+        case 'w':
+        case 'a': {
+            return 3;
+        } break;
+        default:;
+    }
+
+    return ~0_i8;
+}
+
 //  ── BASIC BLOCK BUILDER ─────────────────────────────────────────────
 
 auto BasicBlockBuilder::get_underlying(this BasicBlockBuilder &self) -> BasicBlock & {
@@ -213,7 +239,7 @@ auto BasicBlockBuilder::lower_expression(this BasicBlockBuilder &self, AST::Node
 }
 
 auto BasicBlockBuilder::lower_identifier_expression(this BasicBlockBuilder &self, AST::IdentifierExpression &expression) -> NodeID {
-    auto node_id = self.module_builder->lookup_identifier(expression.identifier);
+    auto node_id = self.module_builder->lower_identifier_expression_type(expression);
     auto type_node_id = self.module_builder->get_underlying_type_node_id(node_id);
     auto *type_node = self.module_builder->get_node(type_node_id);
     auto &type = type_node->type;
@@ -230,8 +256,7 @@ auto BasicBlockBuilder::lower_identifier_expression(this BasicBlockBuilder &self
 }
 
 auto BasicBlockBuilder::lower_constant_expression(this BasicBlockBuilder &self, AST::ConstantValueExpression &expression) -> NodeID {
-    auto lowered_type_node_id = self.module_builder->lower_type(expression.value.type_kind);
-    return self.module_builder->lower_constant(Constant{ .type_node_id = lowered_type_node_id, .u64_value = expression.value.u64_val });
+    return self.module_builder->lower_constant_value_expression_type(expression);
 }
 
 auto BasicBlockBuilder::lower_assign_expression(this BasicBlockBuilder &self, AST::AssignExpression &expression) -> NodeID {
@@ -352,32 +377,76 @@ auto BasicBlockBuilder::lower_function_call_expression(this BasicBlockBuilder &s
 
 auto BasicBlockBuilder::lower_access_field_expression(this BasicBlockBuilder &self, AST::AccessFieldExpression &expression) -> NodeID {
     auto lhs_node_id = self.lower_expression(expression.lhs_expression_id);
-    auto var_node_id = self.module_builder->get_underlying_type_node_id(lhs_node_id);
-    auto struct_type_node_id = self.module_builder->get_underlying_type_node_id(var_node_id, true);
-    auto *struct_type_node = self.module_builder->get_node(struct_type_node_id);
-    auto &type = struct_type_node->type;
+    auto lhs_underlying_node_id = self.module_builder->get_underlying_type_node_id(lhs_node_id);
+    auto composite_type_node_id = self.module_builder->get_underlying_type_node_id(lhs_underlying_node_id, true);
+    auto *composite_type_node = self.module_builder->get_node(composite_type_node_id);
+    auto &composite_type = composite_type_node->type;
 
-    auto field_index = 0;
-    auto field_type_node_id = NodeID::Invalid;
-    for (const auto &[field, i] : std::views::zip(type.fields, std::views::iota(0_i32))) {
-        if (field.identifier == expression.identifier) {
-            field_index = i;
-            field_type_node_id = field.type_node_id;
-            break;
+    if (composite_type.type_kind == TypeKind::eVector) {
+        auto swizzle = expression.identifier.length() > 1;
+        if (swizzle) {
+            auto component_mapping = std::array<u8, 4>{ 0 };
+            for (const auto &[component, component_index] : std::views::zip(expression.identifier, std::views::iota(0_sz))) {
+                component_mapping[component_index] = map_vector_component(component);
+            }
+
+            auto *lhs_underlying_node = self.module_builder->get_node(lhs_underlying_node_id);
+            DEMIR_EXPECT(lhs_underlying_node->kind == NodeKind::eType);
+            auto &lhs_underlying_type = lhs_underlying_node->type;
+            DEMIR_EXPECT(lhs_underlying_type.type_kind == TypeKind::eVector);
+
+            auto new_vector_type = Type{
+                .type_kind = TypeKind::eVector,
+                .element_count = static_cast<u32>(expression.identifier.size()),
+                .pointer_type_node_id = composite_type.pointer_type_node_id,
+            };
+            auto new_vector_type_node_id = self.module_builder->lower_type(new_vector_type);
+
+            auto vector_shuffle_instr = VectorShuffleInstruction{
+                .type_node_id = new_vector_type_node_id,
+                .vector_1_node_id = lhs_node_id,
+                .vector_2_node_id = lhs_node_id,
+                .shuffle_indices = component_mapping,
+            };
+
+            return self.make_instr({ .vector_shuffle_instr = vector_shuffle_instr });
+        } else {
+            auto field_index = map_vector_component(expression.identifier[0]);
+            auto access_index_type_node_id = self.module_builder->lower_type(TypeKind::ei32);
+            auto access_index_node_id = self.module_builder->lower_constant(Constant{ .type_node_id = access_index_type_node_id, .i32_value = field_index });
+
+            auto access_chain_instr = AccessChainInstruction{
+                .type_node_id = composite_type.pointer_type_node_id,
+                .base_node_id = lhs_node_id,
+                .index_node_id = access_index_node_id,
+            };
+            auto access_chain_instr_id = self.make_instr({ .access_chain_instr = access_chain_instr });
+
+            return self.load_instr(access_chain_instr_id, access_chain_instr.type_node_id);
         }
+    } else {
+        auto field_index = 0;
+        auto field_type_node_id = NodeID::Invalid;
+        for (const auto &[field, i] : std::views::zip(composite_type.fields, std::views::iota(0_i32))) {
+            if (field.identifier == expression.identifier) {
+                field_index = i;
+                field_type_node_id = field.type_node_id;
+                break;
+            }
+        }
+
+        auto access_index_type_node_id = self.module_builder->lower_type(TypeKind::ei32);
+        auto access_index_node_id = self.module_builder->lower_constant(Constant{ .type_node_id = access_index_type_node_id, .i32_value = field_index });
+
+        auto access_chain_instr = AccessChainInstruction{
+            .type_node_id = field_type_node_id,
+            .base_node_id = lhs_node_id,
+            .index_node_id = access_index_node_id,
+        };
+        auto access_chain_instr_id = self.make_instr({ .access_chain_instr = access_chain_instr });
+
+        return self.load_instr(access_chain_instr_id, access_chain_instr.type_node_id);
     }
-
-    auto access_index_type_node_id = self.module_builder->lower_type(TypeKind::ei32);
-    auto access_index_node_id = self.module_builder->lower_constant(Constant{ .type_node_id = access_index_type_node_id, .i32_value = field_index });
-
-    auto access_chain_instr = AccessChainInstruction{
-        .type_node_id = field_type_node_id,
-        .base_node_id = lhs_node_id,
-        .index_node_id = access_index_node_id,
-    };
-    auto access_chain_instr_id = self.make_instr({ .access_chain_instr = access_chain_instr });
-
-    return self.load_instr(access_chain_instr_id, field_type_node_id);
 }
 
 //  ── MODULE BUILDER ──────────────────────────────────────────────────
@@ -385,6 +454,36 @@ auto BasicBlockBuilder::lower_access_field_expression(this BasicBlockBuilder &se
 auto ModuleBuilder::build(this ModuleBuilder &self, Span<AST::NodeID> global_ast_node_ids, AST::NodeID entry_point_node_id) -> Module {
     // Reserve global statements
     auto global_ir_node_ids = std::vector<NodeID>();
+
+    auto add_builtin_type = [&](std::string_view identifier, Type type) -> NodeID {
+        auto lowered_type_id = self.lower_type(type);
+        self.symbols.add_symbol(identifier, lowered_type_id);
+
+        return lowered_type_id;
+    };
+
+    // Scalar types
+    add_builtin_type("bool", { .type_kind = TypeKind::eBool });
+    add_builtin_type("i8", { .type_kind = TypeKind::ei8 });
+    add_builtin_type("u8", { .type_kind = TypeKind::eu8 });
+    add_builtin_type("i16", { .type_kind = TypeKind::ei16 });
+    add_builtin_type("u16", { .type_kind = TypeKind::eu16 });
+    auto i32_type_node_id = add_builtin_type("i32", { .type_kind = TypeKind::ei32 });
+    auto u32_type_node_id = add_builtin_type("u32", { .type_kind = TypeKind::eu32 });
+    add_builtin_type("i64", { .type_kind = TypeKind::ei64 });
+    add_builtin_type("u64", { .type_kind = TypeKind::eu64 });
+    auto f32_type_node_id = add_builtin_type("f32", { .type_kind = TypeKind::ef32 });
+    // Vector types
+    add_builtin_type("Vec2i", { .type_kind = TypeKind::eVector, .element_count = 2, .pointer_type_node_id = i32_type_node_id });
+    add_builtin_type("Vec3i", { .type_kind = TypeKind::eVector, .element_count = 3, .pointer_type_node_id = i32_type_node_id });
+    add_builtin_type("Vec4i", { .type_kind = TypeKind::eVector, .element_count = 4, .pointer_type_node_id = i32_type_node_id });
+    add_builtin_type("Vec2u", { .type_kind = TypeKind::eVector, .element_count = 2, .pointer_type_node_id = u32_type_node_id });
+    add_builtin_type("Vec3u", { .type_kind = TypeKind::eVector, .element_count = 3, .pointer_type_node_id = u32_type_node_id });
+    add_builtin_type("Vec4u", { .type_kind = TypeKind::eVector, .element_count = 4, .pointer_type_node_id = u32_type_node_id });
+    add_builtin_type("Vec2f", { .type_kind = TypeKind::eVector, .element_count = 2, .pointer_type_node_id = f32_type_node_id });
+    add_builtin_type("Vec3f", { .type_kind = TypeKind::eVector, .element_count = 3, .pointer_type_node_id = f32_type_node_id });
+    add_builtin_type("Vec4f", { .type_kind = TypeKind::eVector, .element_count = 4, .pointer_type_node_id = f32_type_node_id });
+
     for (auto node_id : global_ast_node_ids) {
         auto *node = self.ast_module->get_node(node_id);
         switch (node->kind) {
@@ -428,6 +527,7 @@ auto ModuleBuilder::build(this ModuleBuilder &self, Span<AST::NodeID> global_ast
 auto ModuleBuilder::make_node(const Node &node) -> NodeID {
     auto node_index = this->nodes.size();
     this->nodes.push_back(node);
+
     return static_cast<NodeID>(node_index);
 }
 
@@ -491,6 +591,7 @@ auto ModuleBuilder::get_underlying_type_node_id(this ModuleBuilder &self, NodeID
         // Nodes that have type node ids
         case NodeKind::eLoad:
         case NodeKind::eAccessChain:
+        case NodeKind::eVectorShuffle:
         case NodeKind::eAdd:
         case NodeKind::eSub:
         case NodeKind::eMul:
@@ -641,7 +742,7 @@ auto ModuleBuilder::lower_type(this ModuleBuilder &self, const Type &type) -> No
                 // TODO: Strings
             } break;
             case TypeKind::eVector: {
-                // TODO: vectors
+                is_same = type.element_count == cur_type.element_count && type.pointer_type_node_id == cur_type.pointer_type_node_id;
             } break;
         }
 
@@ -658,6 +759,60 @@ auto ModuleBuilder::lower_type(this ModuleBuilder &self, const Type &type) -> No
 
 auto ModuleBuilder::lower_type(this ModuleBuilder &self, TypeKind type_kind) -> NodeID {
     return self.lower_type(Type{ .type_kind = type_kind, .element_count = 1 });
+}
+
+auto ModuleBuilder::lower_identifier_expression_type(this ModuleBuilder &self, AST::IdentifierExpression &expression) -> NodeID {
+    return self.lookup_identifier(expression.identifier);
+}
+
+auto ModuleBuilder::lower_constant_value_expression_type(this ModuleBuilder &self, AST::ConstantValueExpression &expression) -> NodeID {
+    auto lowered_type_node_id = self.lower_type(expression.value.type_kind);
+    return self.lower_constant(Constant{ .type_node_id = lowered_type_node_id, .u64_value = expression.value.u64_val });
+}
+
+auto ModuleBuilder::lower_tuple_expression_type(this ModuleBuilder &self, AST::TupleExpression &expression) -> NodeID {
+    auto fields = ankerl::svector<Type::Field, 8>();
+    for (const auto &expression_id : expression.expression_ids) {
+        auto field_type_node_id = self.lower_type(expression_id);
+        fields.push_back({ .type_node_id = field_type_node_id });
+    }
+
+    auto composite_type = Type{
+        .type_kind = TypeKind::eStruct,
+        .fields = self.allocator->copy_into(Span(fields.begin(), fields.size())),
+    };
+    auto composite_node_id = self.lower_type(composite_type);
+
+    auto struct_layout = StructLayout(LayoutKind::eScalar);
+    for (const auto &[field, member_index] : std::views::zip(fields, std::views::iota(0_sz))) {
+        auto *field_type_node = self.get_node(field.type_node_id);
+        auto &field_type = field_type_node->type;
+        auto field_offset = struct_layout.add_field(field_type.type_kind);
+
+        self.decorate_struct_member(composite_node_id, member_index, DecorationKind::eOffset, DecorationOperand{ .byte_offset = field_offset });
+    }
+
+    return composite_node_id;
+}
+
+auto ModuleBuilder::lower_type(this ModuleBuilder &self, AST::NodeID ast_node_id) -> NodeID {
+    auto *expression_node = self.ast_module->get_node(ast_node_id);
+    switch (expression_node->kind) {
+        case AST::NodeKind::eIdentifierExpression: {
+            return self.lower_identifier_expression_type(expression_node->identifier_expression);
+        }
+        case AST::NodeKind::eConstantValueExpression: {
+            return self.lower_constant_value_expression_type(expression_node->const_value_expression);
+        }
+        case AST::NodeKind::eTupleExpression: {
+            return self.lower_tuple_expression_type(expression_node->tuple_expression);
+        }
+        default:;
+    }
+
+    // Only expressions are allowed
+    DEMIR_DEBUGBREAK();
+    return {};
 }
 
 auto ModuleBuilder::lower_constant(this ModuleBuilder &self, const Constant &constant) -> NodeID {
@@ -763,8 +918,8 @@ auto ModuleBuilder::lower_decl_function_statement(this ModuleBuilder &self, AST:
     }
 
     auto return_type_node_id = NodeID::Invalid;
-    if (!statement.return_type_identifier.empty()) {
-        return_type_node_id = self.lower_type(statement.return_type_identifier);
+    if (statement.return_type_expression_id != AST::NodeID::Invalid) {
+        return_type_node_id = self.lower_type(statement.return_type_expression_id);
     } else {
         return_type_node_id = self.lower_type(TypeKind::eVoid);
     }
@@ -1068,17 +1223,17 @@ auto ModuleBuilder::lower_decl_struct_statement(this ModuleBuilder &self, AST::D
         }
     }
 
-    auto struct_fields = std::vector<Type::StructField>();
+    auto fields = std::vector<Type::Field>();
     for (const auto &field : statement.fields) {
         auto field_type_node_id = self.lower_type(field.type_identifier);
-        struct_fields.push_back({ .identifier = field.identifier, .type_node_id = field_type_node_id });
+        fields.push_back({ .identifier = field.identifier, .type_node_id = field_type_node_id });
     }
 
-    auto struct_type = Type{
+    auto composite_type = Type{
         .type_kind = TypeKind::eStruct,
-        .fields = self.allocator->copy_into(Span(struct_fields)),
+        .fields = self.allocator->copy_into(Span(fields)),
     };
-    auto struct_node_id = self.lower_type(struct_type);
+    auto struct_node_id = self.lower_type(composite_type);
     self.symbols.add_symbol(statement.identifier, struct_node_id);
 
     auto struct_layout = StructLayout(struct_layout_kind);
@@ -1095,30 +1250,7 @@ auto ModuleBuilder::lower_decl_struct_statement(this ModuleBuilder &self, AST::D
 }
 
 auto ModuleBuilder::lower_decl_type_statement(this ModuleBuilder &self, AST::DeclareTypeStatement &statement) -> NodeID {
-    if (statement.type_expression_id != AST::NodeID::Invalid) {
-        // TODO: properly support this
-        DEMIR_DEBUGBREAK();
-
-        // FIXME: This is also wrong because in global scope, we should not create blocks
-        //
-        // auto block_builder = self.acquire_block_builder();
-        // block_builder.lower_expression(statement.type_expression_id);
-        // self.release_block_builder(std::move(block_builder));
-    }
-
-    auto intrinsic_type_kind = Option<TypeKind>();
-    for (auto &attribute : statement.attributes) {
-        if (attribute.kind == AttributeKind::eIntrinsicType) {
-            intrinsic_type_kind.emplace(attribute.intrinsic_type_kind);
-            break;
-        }
-    }
-
-    auto type_node_id = NodeID::Invalid;
-    if (intrinsic_type_kind) {
-        type_node_id = self.lower_type(intrinsic_type_kind.value());
-    }
-
+    auto type_node_id = self.lower_type(statement.type_expression_id);
     self.symbols.add_symbol(statement.identifier, type_node_id);
 
     return type_node_id;

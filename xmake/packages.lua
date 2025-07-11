@@ -3,3 +3,4 @@ add_requires("fmt 11.1.4", { configs = {
 }, system = false })
 
 add_requires("unordered_dense v3.0.0", { system = false })
+add_requires("svector v1.0.3", { system = false })

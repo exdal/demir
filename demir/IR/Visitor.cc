@@ -73,6 +73,9 @@ auto Visitor::visit(NodeID node_id) -> void {
             case NodeKind::eAccessChain: {
                 this->visit(cur_node->access_chain_instr, cur_node_id);
             } break;
+            case NodeKind::eVectorShuffle: {
+                this->visit(cur_node->vector_shuffle_instr, cur_node_id);
+            } break;
             case NodeKind::eAdd: {
                 this->visit(cur_node->add_instr, cur_node_id);
             } break;

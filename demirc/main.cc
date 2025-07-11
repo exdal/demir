@@ -209,6 +209,8 @@ auto instruction_kind_to_str(IR::NodeKind kind) -> std::string_view {
             return "OpLogicalNot";
         case IR::NodeKind::eAccessChain:
             return "OpAccessChain";
+        case IR::NodeKind::eVectorShuffle:
+            return "OpVectorShuffle";
     }
 }
 
@@ -437,6 +439,19 @@ struct PrinterVisitor : AST::Visitor {
         pop();
     }
 
+    auto visit(AST::TupleExpression &v) -> void override {
+        print_indented("Tuple expression:");
+
+        push();
+        for (auto node_id : v.expression_ids) {
+            push();
+            visit(node_id);
+            pop();
+        }
+
+        pop();
+    }
+
     auto visit(AST::MultiStatement &v) -> void override {
         print_indented("Multi statement:");
         push();
@@ -466,8 +481,11 @@ struct PrinterVisitor : AST::Visitor {
             print_indented("Parameter type: {}", param.type_identifier);
         }
 
-        if (not v.return_type_identifier.empty()) {
-            print_indented("Return type: {}", v.return_type_identifier);
+        if (v.return_type_expression_id != AST::NodeID::Invalid) {
+            print_indented("Return type expression:");
+            push();
+            visit(v.return_type_expression_id);
+            pop();
         }
 
         visit(v.body_statement_id);
@@ -564,6 +582,12 @@ struct PrinterVisitor : AST::Visitor {
         print_indented("Declare type statement:");
         push();
         print_indented("Identifier: {}", v.identifier);
+        if (v.type_expression_id != AST::NodeID::Invalid) {
+            print_indented("Type expression:");
+            push();
+            visit(v.type_expression_id);
+            pop();
+        }
         pop();
     }
 };
@@ -649,6 +673,20 @@ struct IRPrinter : IR::Visitor {
 
     auto visit(IR::AccessChainInstruction &v, IR::NodeID node_id) -> void override {
         print(node_id, v, "[base_node_id: %{}] [access_index: %{}]", v.base_node_id, v.index_node_id);
+    }
+
+    auto visit(IR::VectorShuffleInstruction &v, IR::NodeID node_id) -> void override {
+        print(
+            node_id,
+            v,
+            "[vector_1: %{}] [vector_2: %{}] [shuffle_indices: {} {} {} {}]",
+            v.vector_1_node_id,
+            v.vector_2_node_id,
+            v.shuffle_indices[0],
+            v.shuffle_indices[1],
+            v.shuffle_indices[2],
+            v.shuffle_indices[3]
+        );
     }
 
     auto visit(IR::AddInstruction &v, IR::NodeID node_id) -> void override {

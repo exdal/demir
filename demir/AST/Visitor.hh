@@ -18,6 +18,7 @@ struct Visitor {
     virtual auto visit(UnaryExpression &) -> void = 0;
     virtual auto visit(AccessFieldExpression &) -> void = 0;
     virtual auto visit(CallFunctionExpression &) -> void = 0;
+    virtual auto visit(TupleExpression &) -> void = 0;
 
     virtual auto visit(MultiStatement &) -> void = 0;
     virtual auto visit(DeclareVarStatement &) -> void = 0;

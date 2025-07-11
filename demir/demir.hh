@@ -79,7 +79,6 @@ enum class AttributeKind : u32 {
     eThreads, // args: vec3u(x, y, z)
     eLayout, // args: "layout_kind"
     ePushConstants,
-    eIntrinsicType, // args: "type identifier"
 };
 
 enum class ShaderKind : u32 {
